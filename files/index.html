@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Pilot · Gestion de chantiers BTP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside id="side"></aside>
+      <main>
+        <header class="top">
+          <button
+            class="ib"
+            data-go="home"
+            aria-label="Points d'attention"
+            title="Points d'attention"
+            id="bell"
+          ></button>
+          <button
+            class="ib"
+            id="th"
+            aria-label="Changer de thème"
+            title="Changer de thème"
+          ></button>
+          <div class="av" aria-label="Jean Dupont">JD</div>
+        </header>
+        <div id="v"></div>
+      </main>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
