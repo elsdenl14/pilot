@@ -181,22 +181,23 @@ const E2 = (n) =>
     .replace(/\u202f/g, "\u00a0") + "\u00a0€";
 const D = (d) => d.split("-").reverse().join("/");
 const esc = (s) =>
-  String(s).replace(
+  String(s ?? "").replace(
     /[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
   );
 const chip = (s) =>
-  `<span class="chip ${{ "En cours": "c-ok", Accepté: "c-ok", "À surveiller": "c-wn", Envoyé: "c-wn", "À facturer": "c-ac" }[s] || "c-n"}">${s}</span>`;
+  `<span class="chip ${{ "En cours": "c-ok", Accepté: "c-ok", Payée: "c-ok", Envoyée: "c-wn", "À surveiller": "c-wn", Envoyé: "c-wn", "À facturer": "c-ac" }[s] || "c-n"}">${s}</span>`;
 const hdr = (eb, t, sub, r = "") =>
   `<div class="hd"><div><div class="eb">${eb}</div><h1>${t}</h1><p class="sub">${sub}</p></div>${r}</div>`;
 const kpi = (l, v, s, c = "") =>
   `<div class="kpi"><small>${l}</small><b class="num">${v}</b><span class="${c}">${s}</span></div>`;
 const tbl = (cols, rows) =>
-  `<div class="tw"><table><thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.map((r) => `<tr data-t="${esc(r.t.toLowerCase())}">${r.c.map((x) => `<td>${x}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${cols.length}">Rien à afficher pour le moment. Utilisez le bouton en haut à droite pour ajouter un élément.</td></tr>`}</tbody></table></div>`;
+  `<div class="tw"><table><thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.map((r) => `<tr data-t="${esc(r.t.toLowerCase())}"${r.o ? ` data-o="${r.o}" tabindex="0"` : ""}>${r.c.map((x) => `<td>${x}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${cols.length}">Rien à afficher pour le moment. Utilisez le bouton en haut à droite pour ajouter un élément.</td></tr>`}</tbody></table></div>`;
 const list = (eb, t, sub, cta, ph, cols, rows, meta) =>
   hdr(eb, t, sub, `<button class="btn" data-new>${cta}</button>`) +
   `<div class="sr"><input id="q" type="search" placeholder="${ph}" aria-label="${ph}"><span class="cnt">${meta}</span></div><div class="card">${tbl(cols, rows)}</div>`;
-const chR = (c) => ({
+const chR = (c, i) => ({
+  o: "chantiers:" + i,
   t: `${c.n} ${c.cl} ${c.v}`,
   c: [
     `<strong>${esc(c.n)}</strong><small>${esc(c.cl)} · ${esc(c.v)}</small>`,
@@ -205,7 +206,8 @@ const chR = (c) => ({
     chip(c.s),
   ],
 });
-const doc = (x, c) => ({
+const doc = (t) => (x, i) => ({
+  o: t + ":" + i,
   t: `${x.num} ${x.cl} ${x.ch}`,
   c: [
     `<strong>${x.num}</strong><small>${esc(x.cl)} · ${esc(x.ch)}</small>`,
@@ -268,7 +270,8 @@ V.clients = () =>
     "+ Nouveau client",
     "Rechercher par nom, ville…",
     ["Client", "Chantiers", "CA", "À encaisser"],
-    db.clients.map((c) => ({
+    db.clients.map((c, i) => ({
+      o: "clients:" + i,
       t: `${c.n} ${c.v} ${c.ty}`,
       c: [
         `<strong>${esc(c.n)}</strong><small>${c.ty} · ${esc(c.v)}</small>`,
@@ -287,7 +290,7 @@ V.devis = () =>
     "+ Nouveau devis",
     "Rechercher un numéro, client, chantier…",
     ["Devis", "Date", "Montant", "Statut"],
-    db.devis.map(doc),
+    db.devis.map(doc("devis")),
     `${db.devis.length} devis · ${E(db.devis.filter((d) => d.s === "Brouillon" || d.s === "Envoyé").reduce((a, d) => a + d.m, 0))} en attente`,
   );
 V.factures = () =>
@@ -298,7 +301,7 @@ V.factures = () =>
     "+ Nouvelle facture",
     "Rechercher un numéro, client, chantier…",
     ["Facture", "Échéance", "Montant", "Statut"],
-    db.factures.map(doc),
+    db.factures.map(doc("factures")),
     `${db.factures.length} facture${db.factures.length > 1 ? "s" : ""} · à jour en temps réel`,
   );
 V.paiements = () =>
@@ -395,6 +398,8 @@ V.params = () => {
       ["s", "SIRET"],
       ["a", "Adresse"],
       ["e", "Email"],
+      ["t", "Téléphone"],
+      ["ib", "IBAN"],
     ]
       .map(
         ([k, l]) =>
@@ -558,7 +563,7 @@ function render() {
   document
     .querySelectorAll(".nav")
     .forEach((n) =>
-      n.setAttribute("aria-current", n.dataset.go === route ? "page" : "false"),
+      n.setAttribute("aria-current", n.dataset.go === curNav() ? "page" : "false"),
     );
   const q = $("#q");
   if (q)
@@ -617,5 +622,310 @@ document.addEventListener("input", (e) => {
     save();
   }
 });
+/* ===== Fiches cliquables, éditeur de devis/facture, transformation, PDF ===== */
+let sel = {},
+  dr = {};
+const CX = {
+  "Jean Dupont": ["8 rue Colbert", "37000", "jean.dupont@mail.fr", "06 12 34 56 78"],
+  "Martin SARL": ["27 avenue de Vendôme", "41000", "contact@martin-sarl.fr", "02 54 11 22 33"],
+  "Sophie Durand": ["15 rue Bannier", "45000", "sophie.durand@mail.fr", "06 98 76 54 32"],
+  BatiCentre: ["4 zone artisanale Les Prés", "18100", "info@baticentre.fr", "02 48 55 66 77"],
+  "Paul Morel": ["31 rue Jacques Cœur", "18000", "paul.morel@mail.fr", "07 44 55 66 77"],
+};
+db.clients.forEach((c) => {
+  const x = CX[c.n];
+  if (x && c.ad === undefined) [c.ad, c.cp, c.em, c.tel] = x;
+});
+db.ent.t ??= "02 54 00 00 00";
+db.ent.ib ??= "FR76 3000 4000 5000 6000 7000 189";
+
+const curNav = () => (route === "detail" ? sel.t : route === "edit" ? dr.t : route);
+const cl = (n) => db.clients.find((k) => k.n === n) || {};
+const p30 = () => new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+const lines = (x) =>
+  x.lines && x.lines.length
+    ? x.lines
+    : [{ d: "Prestation – " + x.ch, q: 1, u: "forfait", pu: +(x.m / 1.2).toFixed(2), tva: 20 }];
+const tot = (ls) => {
+  let ht = 0,
+    tv = 0;
+  ls.forEach((l) => {
+    const h = (+l.q || 0) * (+l.pu || 0);
+    ht += h;
+    tv += (h * (+l.tva || 0)) / 100;
+  });
+  return { ht, tv, ttc: ht + tv };
+};
+const openItem = (t, i) => {
+  sel = { t, i };
+  route = "detail";
+  render();
+  window.scrollTo(0, 0);
+};
+const clk = (n) => {
+  const i = db.clients.findIndex((k) => k.n === n);
+  return i < 0 ? esc(n) : `<button class="lk" data-open="clients:${i}">${esc(n)}</button>`;
+};
+const back = (t, l) => `<button class="lk" data-go="${t}" style="margin-bottom:12px">← ${l}</button>`;
+const info = (rows) =>
+  rows.map(([l, v]) => `<div class="row"><small>${l}</small><b>${v}</b></div>`).join("");
+const sect = (eb, t, f) => {
+  const r = db[t].map((x, i) => ({ x, i })).filter((o) => f(o.x));
+  return `<div class="card" style="margin-top:16px"><div class="ch"><div><div class="eb">${eb}</div><b>${r.length}</b></div></div>${tbl(
+    t === "chantiers"
+      ? ["Chantier", "Avancement", "Marché", "Statut"]
+      : ["Document", "Date", "Montant", "Statut"],
+    r.map((o) => (t === "chantiers" ? chR(o.x, o.i) : doc(t)(o.x, o.i))),
+  )}</div>`;
+};
+
+/* ---- Fiches ---- */
+const fClient = (c) =>
+  back("clients", "Clients") +
+  hdr("Fiche client", esc(c.n), `${c.ty} · ${esc(c.v)}`, `<button class="btn" data-a="newDevis">+ Nouveau devis</button>`) +
+  `<div class="card">${info([
+    ["Adresse", esc(c.ad ? `${c.ad}, ${c.cp || ""} ${c.v}` : c.v)],
+    ["Email", esc(c.em || "—")],
+    ["Téléphone", esc(c.tel || "—")],
+  ])}</div><div class="kp">${kpi("Chantiers", c.ch, "")}${kpi("Chiffre d'affaires", E(c.ca), "")}${kpi("À encaisser", E(c.du), c.du ? "En attente" : "À jour", c.du ? "dn" : "up")}</div>` +
+  sect("Chantiers", "chantiers", (x) => x.cl === c.n) +
+  sect("Devis", "devis", (x) => x.cl === c.n) +
+  sect("Factures", "factures", (x) => x.cl === c.n);
+const fChantier = (c) =>
+  back("chantiers", "Chantiers") +
+  hdr("Fiche chantier", esc(c.n), esc(c.v), `<button class="btn" data-a="newDevis">+ Nouveau devis</button>`) +
+  `<div class="card">${info([
+    ["Client", clk(c.cl)],
+    ["Ville", esc(c.v)],
+    ["Avancement", `${c.av} %<div class="bar"><i style="width:${c.av}%"></i></div>`],
+    ["Marché", `<span class="num">${E(c.m)}</span>`],
+    ["Statut", chip(c.s)],
+  ])}</div>` +
+  sect("Devis", "devis", (x) => x.ch === c.n) +
+  sect("Factures", "factures", (x) => x.ch === c.n);
+
+/* ---- Document (aperçu = PDF) ---- */
+const paper = (x, t) => {
+  const e = db.ent,
+    c = cl(x.cl),
+    ls = lines(x),
+    T = tot(ls),
+    isD = t === "devis",
+    ac = x.ac ?? 30,
+    em = x.de || (isD ? x.d : "");
+  return `<div class="paper"><div class="ph"><div class="lg">${esc(e.n.split(" ").map((w) => w[0]).slice(0, 2).join(""))}</div><div class="pt1"><h2>${isD ? "DEVIS" : "FACTURE"}</h2><p>Numéro : <b>${esc(x.num)}</b></p><p>Date d'émission : ${em ? D(em) : "—"}</p><p>${isD ? `Validité : ${x.val ?? 3} mois` : `Échéance : ${D(x.d)}`}</p></div></div>
+<div class="pb"><div><b>${esc(e.n)}</b><br>${esc(e.a)}<br>Tél : ${esc(e.t || "")}<br>Mail : ${esc(e.e)}<br>SIRET : ${esc(e.s)}</div><div><b>Client :</b><br>${esc(x.cl)}<br>${esc(c.ad || "")}<br>${esc(c.cp || "")} ${esc(c.v || "")}<br>${esc(c.em || "")}</div></div>
+${x.obj ? `<p><b>Objet :</b> ${esc(x.obj)}</p>` : ""}
+<table class="pl"><thead><tr>${["Désignation", "Qté", "Unité", "PU HT", "% TVA", "Total TVA", "Total HT"].map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${ls
+    .map((l) => {
+      const h = (+l.q || 0) * (+l.pu || 0);
+      return `<tr><td class="l">${esc(l.d)}</td><td>${l.q}</td><td>${esc(l.u)}</td><td>${E2(l.pu)}</td><td>${l.tva} %</td><td>${E2((h * l.tva) / 100)}</td><td>${E2(h)}</td></tr>`;
+    })
+    .join("")}</tbody></table>
+<div class="pf"><div>${isD ? `<b>Conditions de règlement :</b><p>Acompte de ${ac} % à la commande : <b>${E2((T.ttc * ac) / 100)}</b></p><p>Solde à la livraison.</p>` : x.from ? `<p>Issue du devis ${esc(x.from)}</p>` : ""}</div>
+<table class="pt"><tr><th>Total HT</th><td>${E2(T.ht)}</td></tr><tr><th>Total TVA</th><td>${E2(T.tv)}</td></tr><tr><th>Net à payer</th><td><b>${E2(T.ttc)}</b></td></tr></table></div>
+${isD ? `<div class="sg">Signature du client (précédée de la mention « Bon pour accord »)</div>` : ""}
+<p class="pft">${esc(e.n)} · SIRET ${esc(e.s)}${e.ib ? ` · IBAN ${esc(e.ib)}` : ""}</p></div>`;
+};
+const fDoc = (x, t) => {
+  const isD = t === "devis",
+    ST = isD ? ["Brouillon", "Envoyé", "Accepté", "Refusé"] : ["Brouillon", "Envoyée", "Payée"],
+    ok = !isD || ["Brouillon", "Envoyé"].includes(x.s),
+    acc = isD && x.s === "Accepté";
+  return (
+    back(t, isD ? "Devis" : "Factures") +
+    hdr(
+      isD ? "Devis" : "Facture",
+      esc(x.num),
+      `${clk(x.cl)} · ${esc(x.ch)}${isD && !acc ? " · Passez le statut à « Accepté » pour le transformer en facture." : ""}`,
+      `<div class="fa" style="flex-wrap:wrap"><select class="ei" data-st aria-label="Statut" style="width:auto">${ST.map((s) => `<option ${s === x.s ? "selected" : ""}>${s}</option>`).join("")}</select>${ok ? `<button class="btn o" data-a="edit">Modifier</button>` : ""}${acc ? (x.fact ? `<button class="btn o" data-a="seeFac">Voir la facture ${esc(x.fact)}</button>` : `<button class="btn o" data-a="toFac">Transformer en facture</button>`) : ""}<button class="btn" data-a="pdf">Télécharger en PDF</button></div>`,
+    ) +
+    `<div class="pv">${paper(x, t)}</div>`
+  );
+};
+V.detail = () => {
+  const { t, i } = sel,
+    x = (db[t] || [])[i];
+  if (!x) {
+    route = t || "home";
+    return V[route]();
+  }
+  return t === "clients" ? fClient(x) : t === "chantiers" ? fChantier(x) : fDoc(x, t);
+};
+
+/* ---- Éditeur ---- */
+const fld = (l, k, v, ty = "text", ex = "") =>
+  `<label class="lb">${l}<input class="ei" data-f="${k}" type="${ty}" ${ty === "number" ? 'min="0" step="any"' : ""} value="${esc(v)}" ${ex}></label>`;
+const totHtml = (T, x) =>
+  `<div class="row"><span>Total HT</span><b class="num">${E2(T.ht)}</b></div><div class="row"><span>Total TVA</span><b class="num">${E2(T.tv)}</b></div><div class="row"><span>Net à payer (TTC)</span><b class="num" style="font-size:18px">${E2(T.ttc)}</b></div>${dr.t === "devis" ? `<div class="row"><span>Acompte ${x.ac} %</span><b class="num">${E2((T.ttc * x.ac) / 100)}</b></div>` : ""}`;
+V.edit = () => {
+  const { t, x } = dr,
+    isD = t === "devis",
+    c = cl(x.cl),
+    chs = ["Sans chantier", ...db.chantiers.filter((h) => h.cl === x.cl).map((h) => h.n)];
+  if (!chs.includes(x.ch)) x.ch = "Sans chantier";
+  const opt = (a, v) => a.map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("");
+  return (
+    hdr(
+      isD ? "Commercial" : "Finances",
+      `${dr.i === null ? "Nouveau" : "Modifier le"} ${isD ? "devis" : "facture"}`,
+      `Numéro ${esc(x.num)}`,
+      `<div class="fa"><button class="btn o" data-a="cancel">Annuler</button><button class="btn" data-a="saveDoc">Enregistrer</button></div>`,
+    ) +
+    `<div class="card"><div class="ch"><div><div class="eb">Informations</div><b>Client et chantier</b></div></div><div class="pad"><div class="fg"><label class="lb">Client<select class="ei" data-f="cl">${opt(cn(), x.cl)}</select></label><label class="lb">Chantier<select class="ei" data-f="ch">${opt(chs, x.ch)}</select></label>${
+      isD
+        ? fld("Date du devis", "d", x.d, "date") + fld("Validité (mois)", "val", x.val, "number") + fld("Acompte (%)", "ac", x.ac, "number")
+        : fld("Date d'émission", "de", x.de, "date") + fld("Échéance", "d", x.d, "date")
+    }${fld("Objet", "obj", x.obj, "text", 'placeholder="Ex : Rénovation cuisine"')}</div><div class="note" style="margin:0"><b>${esc(x.cl)}</b><br>${esc(c.ad || "Adresse non renseignée")}, ${esc(c.cp || "")} ${esc(c.v || "")}<br>${esc(c.em || "")} ${esc(c.tel || "")}</div></div></div>
+<div class="g2"><div class="card"><div class="ch"><div><div class="eb">Prestations</div><b>Lignes</b></div><button class="btn o" data-a="addL">+ Ajouter une ligne</button></div><div class="tw ed"><table><thead><tr>${["Désignation", "Qté", "Unité", "PU HT (€)", "TVA %", "Total HT", ""].map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${x.lines
+      .map(
+        (l, k) =>
+          `<tr><td><input class="ei li" style="min-width:200px" data-l="${k}:d" value="${esc(l.d)}" placeholder="Désignation" aria-label="Désignation"></td><td><input class="ei li" type="number" min="0" step="any" data-l="${k}:q" value="${l.q}" aria-label="Quantité"></td><td><input class="ei li" data-l="${k}:u" value="${esc(l.u)}" aria-label="Unité"></td><td><input class="ei li" type="number" min="0" step="any" data-l="${k}:pu" value="${l.pu}" aria-label="Prix unitaire HT"></td><td><select class="ei li" data-l="${k}:tva" aria-label="TVA">${[0, 5.5, 10, 20].map((v) => `<option ${+l.tva === v ? "selected" : ""}>${v}</option>`).join("")}</select></td><td class="num" id="lt${k}">${E2((+l.q || 0) * (+l.pu || 0))}</td><td><button class="lk" data-a="rm" data-k="${k}" aria-label="Supprimer la ligne">✕</button></td></tr>`,
+      )
+      .join("")}</tbody></table></div></div>
+<div class="card"><div class="ch"><div><div class="eb">Totaux</div><b>Calcul automatique</b></div></div><div id="ttot">${totHtml(tot(x.lines), x)}</div></div></div>`
+  );
+};
+const startEdit = (t, i = null, cli, ch) => {
+  const n =
+    t === "devis"
+      ? nextNum(db.devis)
+      : "FAC-2026-" + String(Math.max(0, ...db.factures.map((f) => +f.num.slice(9) || 0)) + 1).padStart(3, "0");
+  const x =
+    i !== null
+      ? JSON.parse(JSON.stringify(db[t][i]))
+      : { num: n, cl: cli || (db.clients[0] || {}).n || "", ch: ch || "Sans chantier", obj: "", s: "Brouillon", de: today(), d: t === "devis" ? today() : p30() };
+  x.lines = i !== null ? JSON.parse(JSON.stringify(lines(x))) : [{ d: "", q: 1, u: "u", pu: 0, tva: 20 }];
+  x.val ??= 3;
+  x.ac ??= 30;
+  x.de ||= x.d;
+  dr = { t, i, x };
+  route = "edit";
+  render();
+  window.scrollTo(0, 0);
+};
+NEW.devis = () => startEdit("devis");
+NEW.factures = () => startEdit("factures");
+NEW.clients = () =>
+  openForm(
+    "Nouveau client",
+    [
+      { k: "n", l: "Nom" },
+      { k: "ty", l: "Type", t: "select", o: ["Particulier", "Professionnel"] },
+      { k: "ad", l: "Adresse", r: 0 },
+      { k: "cp", l: "Code postal", r: 0 },
+      { k: "v", l: "Ville" },
+      { k: "em", l: "Email", t: "email", r: 0 },
+      { k: "tel", l: "Téléphone", t: "tel", r: 0 },
+    ],
+    (o) => db.clients.push({ ...o, ch: 0, ca: 0, du: 0 }),
+  );
+
+/* ---- Actions ---- */
+const upd = () => {
+  dr.x.lines.forEach((l, k) => {
+    const e = $("#lt" + k);
+    if (e) e.textContent = E2((+l.q || 0) * (+l.pu || 0));
+  });
+  $("#ttot").innerHTML = totHtml(tot(dr.x.lines), dr.x);
+};
+const A = {
+  pdf() {
+    const x = db[sel.t][sel.i],
+      p = document.createElement("div"),
+      old = document.title;
+    p.id = "print";
+    p.innerHTML = paper(x, sel.t);
+    document.body.appendChild(p);
+    document.title = (sel.t === "devis" ? "Devis " : "Facture ") + x.num;
+    const done = () => {
+      p.remove();
+      document.title = old;
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
+    window.print();
+  },
+  edit: () => startEdit(sel.t, sel.i),
+  cancel: () => (dr.i === null ? go(dr.t) : openItem(dr.t, dr.i)),
+  addL() {
+    dr.x.lines.push({ d: "", q: 1, u: "u", pu: 0, tva: 20 });
+    render();
+    const f = document.querySelectorAll('[data-l$=":d"]');
+    f[f.length - 1]?.focus();
+  },
+  rm(d) {
+    dr.x.lines.splice(+d.k, 1);
+    if (!dr.x.lines.length) dr.x.lines.push({ d: "", q: 1, u: "u", pu: 0, tva: 20 });
+    render();
+  },
+  saveDoc() {
+    const { t, i, x } = dr;
+    x.lines = x.lines.filter((l) => String(l.d).trim());
+    if (!x.lines.length) {
+      x.lines = [{ d: "", q: 1, u: "u", pu: 0, tva: 20 }];
+      render();
+      return alert("Ajoutez au moins une ligne avec une désignation.");
+    }
+    x.m = +tot(x.lines).ttc.toFixed(2);
+    if (t === "devis") x.de = x.d;
+    if (i === null) db[t].unshift(x);
+    else db[t][i] = x;
+    save();
+    openItem(t, i === null ? 0 : i);
+  },
+  toFac() {
+    const x = db.devis[sel.i],
+      n = "FAC-2026-" + String(Math.max(0, ...db.factures.map((f) => +f.num.slice(9) || 0)) + 1).padStart(3, "0");
+    db.factures.unshift({ num: n, cl: x.cl, ch: x.ch, obj: x.obj, lines: JSON.parse(JSON.stringify(lines(x))), m: x.m, de: today(), d: p30(), s: "Brouillon", from: x.num });
+    x.fact = n;
+    save();
+    openItem("factures", 0);
+  },
+  seeFac() {
+    const i = db.factures.findIndex((f) => f.num === db.devis[sel.i].fact);
+    if (i >= 0) openItem("factures", i);
+  },
+  newDevis() {
+    const o = db[sel.t][sel.i];
+    sel.t === "clients" ? startEdit("devis", null, o.n) : startEdit("devis", null, o.cl, o.n);
+  },
+};
+document.addEventListener("click", (e) => {
+  const t = e.target;
+  let x;
+  if ((x = t.closest("[data-open]"))) {
+    const [a, b] = x.dataset.open.split(":");
+    return openItem(a, +b);
+  }
+  if ((x = t.closest("[data-a]")) && A[x.dataset.a]) return A[x.dataset.a](x.dataset);
+  if ((x = t.closest("tr[data-o]"))) {
+    const [a, b] = x.dataset.o.split(":");
+    openItem(a, +b);
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches("tr[data-o]")) e.target.click();
+});
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.dataset.st) {
+    db[sel.t][sel.i].s = t.value;
+    save();
+    return render();
+  }
+  if (route !== "edit") return;
+  if (t.dataset.l) {
+    const [k, f] = t.dataset.l.split(":");
+    dr.x.lines[k][f] = ["q", "pu", "tva"].includes(f) ? +t.value : t.value;
+    return upd();
+  }
+  const f = t.dataset.f;
+  if (!f) return;
+  dr.x[f] = t.type === "number" ? +t.value : t.value;
+  if (f === "cl") render();
+  else if (f === "ac") upd();
+});
+
 setTh(th);
 render();
