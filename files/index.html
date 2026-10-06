@@ -1,45 +1,43 @@
 <!doctype html>
-<html lang="fr" data-theme="dark">
+<html lang="fr" data-theme="light">
   <head>
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
-    <title>Pilot · Gestion de chantiers BTP</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Pilot · Gestion de chantiers</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314253f'/%3E%3Cpath d='M11 24V8h6.5a5 5 0 010 10H11' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="app">
+    <div class="app" id="app">
       <aside id="side"></aside>
       <main>
         <header class="top">
-          <button
-            class="ib"
-            data-go="home"
-            aria-label="Points d'attention"
-            title="Points d'attention"
-            id="bell"
-          ></button>
-          <button
-            class="ib"
-            id="th"
-            aria-label="Changer de thème"
-            title="Changer de thème"
-          ></button>
-          <div class="av" id="av" aria-label="Compte">··</div>
+          <span class="ro-badge" id="robadge" hidden>Lecture seule · dossier comptable</span>
+          <span class="sp"></span>
+          <div class="pw">
+            <button class="ib" id="bell" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" title="Notifications"></button>
+            <div id="notifpop" class="pop" hidden></div>
+          </div>
+          <button class="ib" id="th" aria-label="Changer de thème" title="Changer de thème"></button>
+          <div class="pw">
+            <button class="av" id="av" aria-label="Compte" aria-haspopup="true" aria-expanded="false">··</button>
+            <div id="usermenu" class="pop sm" hidden></div>
+          </div>
         </header>
         <div id="v"></div>
       </main>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
+    <script src="lib.js"></script>
+    <script src="pdf.js"></script>
+    <script src="core.js"></script>
+    <script src="views-activite.js"></script>
+    <script src="views-docs.js"></script>
+    <script src="views-finance.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
