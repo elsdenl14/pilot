@@ -70,28 +70,22 @@ function docPreview(K, d, lignes) {
   const e = db.ent, c = clientOf(d.client_id) || {}, k = KD[K];
   const by = totauxParTaux(lignes, d);
   const rates = Object.keys(by).sort((a, b) => b - a);
-  const rows = lignes.length
-    ? (() => {
-      let cur = "", sub = 0, out = "";
-      const close = () => { if (cur) out += `<tr class="cs"><td colspan="4" class="r">Sous-total ${esc(cur)}</td><td class="r"><b>${fmtNum(sub)}</b></td></tr>`; };
-      for (const l of lignes) {
-        const c = String(l.categorie || "").trim();
-        if (c !== cur) { close(); cur = c; sub = 0; if (c) out += `<tr class="cc"><td colspan="5">${esc(c)}</td></tr>`; }
-        const ht = r2(l.quantite * l.prix_unitaire_ht);
-        sub += ht;
-        out += `<tr><td>${esc(l.designation)}${l.description ? `<small class="ld">${esc(l.description).replace(/\n/g, "<br>")}</small>` : ""}</td><td class="r">${fmtNum(l.quantite, Number.isInteger(l.quantite) ? 0 : 2)} ${esc(l.unite || "")}</td><td class="r">${fmtNum(l.prix_unitaire_ht)}</td><td class="r">${fmtNum(l.taux_tva, l.taux_tva % 1 ? 1 : 0)} %</td><td class="r"><b>${fmtNum(ht)}</b></td></tr>`;
-      }
-      close();
-      return out;
-    })()
-    : `<tr><td colspan="5" class="mut">Aucune ligne détaillée (montant global).</td></tr>`;
+  const lht = (l) => r2(l.quantite * l.prix_unitaire_ht);
+  const gs = lignes.length ? groupCats(lignes) : [];
+  gs.forEach((g) => (g.sum = r2(sum(g.lignes, lht))));
+  const recap = gs.filter((g) => g.cat).length >= 2 ? `<div class="doc-recap"><b>Récapitulatif des travaux</b>${gs.map((g, i) => `<div><span>${i + 1}. ${esc(g.cat || "Divers")}</span><span class="num">${E2(g.sum)}</span></div>`).join("")}</div>` : "";
+  const rows = gs.length
+    ? gs.map((g, gi) => (g.cat ? `<tr class="cc"><td colspan="5">${gi + 1}. ${esc(g.cat)}</td><td class="r">Sous-total ${E2(g.sum)}</td></tr>` : "") +
+      g.lignes.map((l, li) => `<tr><td class="n">${gi + 1}.${li + 1}</td><td>${esc(l.designation)}${l.description ? `<small class="ld">${esc(l.description).replace(/\n/g, "<br>")}</small>` : ""}</td><td class="r">${fmtNum(l.quantite, Number.isInteger(l.quantite) ? 0 : 2)} ${esc(l.unite || "")}</td><td class="r">${fmtNum(l.prix_unitaire_ht)}</td><td class="r">${fmtNum(l.taux_tva, l.taux_tva % 1 ? 1 : 0)} %</td><td class="r"><b>${fmtNum(lht(l))}</b></td></tr>`).join("")).join("")
+    : `<tr><td colspan="6" class="mut">Aucune ligne détaillée (montant global).</td></tr>`;
   const paye = K === "facture" ? d.paye : 0;
   return `<div class="doc">
-    <div class="doc-h"><div><b>${esc(e.nom || "Votre entreprise")}</b><small>${esc(e.adresse || "")}</small><small>${esc([e.telephone, e.email].filter(Boolean).join(" · "))}</small></div>
+    <div class="doc-h doc-top"><div><b>${esc(e.nom || "Votre entreprise")}</b><small>${esc(e.adresse || "")}</small><small>${esc([e.telephone, e.email].filter(Boolean).join(" · "))}</small></div>
       <div style="text-align:right"><b>${k.label} ${esc(docNum(d, K))}</b><small>Date : ${D(d[k.df])}</small><small>${K === "devis" ? `Valable ${d.validite_jours} jours` : `Échéance : ${D(d.echeance)}`}</small></div></div>
     <div class="doc-h"><div><small>${K === "devis" ? "Destinataire" : "Facturé à"}</small><b>${esc(c.nom || d.client_nom)}</b><small>${esc(c.adresse || "")}</small><small>${esc(c.ville || "")}</small></div>
       ${d.chantier_nom ? `<div style="text-align:right"><small>Chantier</small><b>${esc(d.chantier_nom)}</b></div>` : ""}</div>
-    <div class="tw"><table><thead><tr><th>Désignation</th><th class="r">Quantité</th><th class="r">P.U. HT</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${recap}
+    <div class="tw"><table class="dt"><thead><tr><th class="n">N°</th><th>Désignation</th><th class="r">Quantité</th><th class="r">P.U. HT</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="totaux"><div><span>Total HT</span><span class="num">${E2(d.montant_ht)}</span></div>
       ${rates.map((t) => `<div><span>TVA ${fmtNum(t, t % 1 ? 1 : 0)} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}
       <div class="ttc"><span>Total TTC</span><span class="num">${E2(d.montant_ttc)}</span></div>

@@ -107,6 +107,7 @@ const PilotPdf = (() => {
     const newPage = (first = false) => {
       page = pdf.addPage([W, H]);
       drawBg(page);
+      if (!bg) page.drawRectangle({ x: 0, y: H - 8, width: W, height: 8, color: A });
       y = H - topM;
       if (!first) {
         txt(`${kind === "devis" ? "Devis" : "Facture"} ${data.numero || ""} (suite)`, ML, y, { size: 8.5, color: GREY });
@@ -142,20 +143,24 @@ const PilotPdf = (() => {
       for (const l of idLines) {
         for (const ll of wrap(l, font, 8.5, 250)) { txt(ll, ML, hy - 4, { size: 8.5, color: GREY }); hy -= 11.5; }
       }
-      txt(title, rightX, y - 4, { size: 24, f: bold, color: A, right: true });
-      let ry = y - 24;
+      txt(title, rightX, y - 8, { size: 28, f: bold, color: A, right: true });
+      const mx = rightX - 196, my = y - 22, mh = 64;
+      page.drawRectangle({ x: mx, y: my - mh, width: 196, height: mh, color: ASoft });
+      page.drawRectangle({ x: mx, y: my - mh, width: 3, height: mh, color: A });
       const meta = [
         ["N°", data.numero || "-"],
-        ["Date", D(data.date)],
-        kind === "devis" ? ["Valable", (data.validite_jours || 30) + " jours"] : ["Échéance", D(data.echeance)],
+        ["Date d'émission", D(data.date)],
+        kind === "devis" ? ["Valable jusqu'au", D(addDays(data.date, Number(data.validite_jours) || 30))] : ["Échéance", D(data.echeance)],
       ];
+      let ry = my - 18;
       for (const [k, v] of meta) {
-        txt(k, rightX - 130, ry, { size: 9, color: GREY });
-        txt(v, rightX, ry, { size: 9.5, f: bold, right: true });
-        ry -= 14;
+        txt(k, mx + 14, ry, { size: 8.5, color: GREY });
+        txt(v, rightX - 10, ry, { size: 9.5, f: bold, right: true });
+        ry -= 16;
       }
-      if (data.statut === "Brouillon") txt("BROUILLON", rightX, ry - 2, { size: 9, f: bold, color: rgb(0.7, 0.25, 0.2), right: true });
-      y = Math.min(hy, ry) - 24;
+      ry = my - mh;
+      if (data.statut === "Brouillon") { txt("BROUILLON", rightX, ry - 14, { size: 9, f: bold, color: rgb(0.7, 0.25, 0.2), right: true }); ry -= 16; }
+      y = Math.min(hy, ry) - 16;
     } else {
       txt(`${title}  ${data.numero || ""}`, ML, y - 4, { size: 18, f: bold, color: A });
       let ry = y - 24;
@@ -168,106 +173,128 @@ const PilotPdf = (() => {
       y = ry - 20;
     }
 
-    // ---- Bloc client + objet ----
+    // ---- Bloc client + projet ----
     const c = data.client || {};
     const cl = [c.nom, c.adresse, c.ville, c.telephone, c.email].filter(Boolean);
-    const boxW = 250,
-      boxX = W - ML - boxW;
-    let by = y;
+    const boxW = 250, boxX = W - ML - boxW;
     const clientLines = [];
-    cl.forEach((l, i) => wrap(l, i === 0 ? bold : font, i === 0 ? 10.5 : 9, boxW - 20).forEach((ll) => clientLines.push([ll, i === 0])));
-    const boxH = 30 + clientLines.length * 13;
-    need(boxH + 20);
-    by = y;
-    page.drawRectangle({ x: boxX, y: by - boxH, width: boxW, height: boxH, borderColor: LINE, borderWidth: 0.8 });
-    txt(kind === "devis" ? "DESTINATAIRE" : "FACTURÉ À", boxX + 10, by - 15, { size: 7.5, f: bold, color: GREY });
-    let cy = by - 30;
-    for (const [ll, b] of clientLines) { txt(ll, boxX + 10, cy, { size: b ? 10.5 : 9, f: b ? bold : font }); cy -= 13; }
-    let oy = by - 15;
+    cl.forEach((l, i) => wrap(l, i === 0 ? bold : font, i === 0 ? 10.5 : 9, boxW - 28).forEach((ll) => clientLines.push([ll, i === 0])));
     const objet = [];
     if (data.chantier?.nom) objet.push(["Chantier", [data.chantier.nom, data.chantier.ville].filter(Boolean).join(" - ")]);
     if (kind === "facture" && data.devis_numero) objet.push(["Réf. devis", data.devis_numero]);
-    for (const [k, v] of objet) {
-      txt(k.toUpperCase(), ML, oy, { size: 7.5, f: bold, color: GREY });
+    const objLines = objet.map(([k, v]) => [k, wrap(v, font, 9.5, boxX - ML - 18)]);
+    const leftH = objLines.length ? 24 + sum(objLines, ([, ls]) => 13 + ls.length * 12.5 + 6) : 0;
+    const boxH = Math.max(36 + clientLines.length * 13, leftH + 4);
+    need(boxH + 20);
+    const by = y;
+    page.drawRectangle({ x: boxX, y: by - boxH, width: boxW, height: boxH, color: ASoft });
+    page.drawRectangle({ x: boxX, y: by - boxH, width: 3, height: boxH, color: A });
+    txt(kind === "devis" ? "DESTINATAIRE" : "FACTURÉ À", boxX + 14, by - 16, { size: 7.5, f: bold, color: A });
+    let cy = by - 33;
+    for (const [ll, b] of clientLines) { txt(ll, boxX + 14, cy, { size: b ? 10.5 : 9, f: b ? bold : font }); cy -= 13; }
+    let oy = by - 16;
+    if (objLines.length) { txt(kind === "devis" ? "PROJET" : "RÉFÉRENCES", ML, oy, { size: 7.5, f: bold, color: A }); oy -= 17; }
+    for (const [k, ls] of objLines) {
+      txt(k, ML, oy, { size: 8, color: GREY });
       oy -= 13;
-      for (const ll of wrap(v, font, 9.5, boxX - ML - 16)) { txt(ll, ML, oy, { size: 9.5 }); oy -= 12.5; }
+      for (const ll of ls) { txt(ll, ML, oy, { size: 9.5, f: bold }); oy -= 12.5; }
       oy -= 6;
     }
-    y = by - boxH - 22;
+    y = by - boxH - 14;
 
     // ---- Tableau ----
-    const X = { qte: 318, unite: 326, pu: 428, tva: 474, tot: W - ML - 6 };
-    const designW = X.qte - ML - 6 - 38;
+    const X = { n: ML + 6, qte: 330, unite: 338, pu: 432, tva: 478, tot: W - ML - 6 };
+    const designX = ML + 32, designW = X.qte - designX - 40;
+    const WHITE = rgb(1, 1, 1), ZEBRA = rgb(0.975, 0.978, 0.982);
+    const lignes = data.lignes?.length ? data.lignes : data.ht > 0 ? [{ designation: "Prestation", quantite: 1, unite: "forfait", prix_unitaire_ht: data.ht, taux_tva: data.taux_tva ?? 20 }] : [];
+    const lht = (l) => r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
+    const groups = [];
+    for (const l of lignes) {
+      const cat = String(l.categorie || "").trim(), g = groups[groups.length - 1];
+      if (g && g.cat === cat) g.items.push(l); else groups.push({ cat, items: [l] });
+    }
+    groups.forEach((g) => (g.sum = r2(sum(g.items, lht))));
+    // Récapitulatif : on voit d'un coup d'oeil le prix de chaque poste
+    if (groups.filter((g) => g.cat).length >= 2) {
+      need(40 + groups.length * 17);
+      txt("RÉCAPITULATIF DES TRAVAUX", ML, y - 8, { size: 8, f: bold, color: A });
+      y -= 22;
+      groups.forEach((g, i) => {
+        need(20);
+        txt(`${i + 1}.  ${g.cat || "Divers"}`, ML + 6, y - 8, { size: 9.5 });
+        txt(money(g.sum), X.tot, y - 8, { size: 9.5, f: bold, right: true });
+        y -= 16;
+        page.drawLine({ start: { x: ML, y: y + 3 }, end: { x: W - ML, y: y + 3 }, thickness: 0.4, color: LINE });
+      });
+      y -= 10;
+    }
     const header = () => {
-      need(40);
-      page.drawRectangle({ x: ML, y: y - 18, width: W - 2 * ML, height: 20, color: ASoft });
-      txt("Désignation", ML + 6, y - 11, { size: 8.5, f: bold, color: A });
-      txt("Qté", X.qte, y - 11, { size: 8.5, f: bold, color: A, right: true });
-      txt("Unité", X.unite, y - 11, { size: 8.5, f: bold, color: A });
-      txt("P.U. HT", X.pu, y - 11, { size: 8.5, f: bold, color: A, right: true });
-      txt("TVA", X.tva, y - 11, { size: 8.5, f: bold, color: A, right: true });
-      txt("Total HT", X.tot, y - 11, { size: 8.5, f: bold, color: A, right: true });
-      y -= 24;
+      need(60);
+      page.drawRectangle({ x: ML, y: y - 20, width: W - 2 * ML, height: 22, color: A });
+      txt("N°", X.n, y - 13, { size: 8.5, f: bold, color: WHITE });
+      txt("Désignation", designX, y - 13, { size: 8.5, f: bold, color: WHITE });
+      txt("Qté", X.qte, y - 13, { size: 8.5, f: bold, color: WHITE, right: true });
+      txt("Unité", X.unite, y - 13, { size: 8.5, f: bold, color: WHITE });
+      txt("P.U. HT", X.pu, y - 13, { size: 8.5, f: bold, color: WHITE, right: true });
+      txt("TVA", X.tva, y - 13, { size: 8.5, f: bold, color: WHITE, right: true });
+      txt("Total HT", X.tot, y - 13, { size: 8.5, f: bold, color: WHITE, right: true });
+      y -= 26;
     };
     header();
-    const lignes = data.lignes?.length ? data.lignes : data.ht > 0 ? [{ designation: "Prestation", quantite: 1, unite: "forfait", prix_unitaire_ht: data.ht, taux_tva: data.taux_tva ?? 20 }] : [];
-    const byRate = {};
-    let curCat = "", catSum = 0;
-    const closeCat = () => {
-      if (!curCat) return;
-      if (y - 20 < botM) { newPage(); header(); }
-      txt("Sous-total " + curCat, X.pu + 40, y - 8, { size: 8.5, color: GREY, right: true });
-      txt(fmtNum(catSum, 2), X.tot, y - 8, { size: 9, f: bold, right: true });
-      y -= 20;
+    const band = (g, gi, cont) => {
+      page.drawRectangle({ x: ML, y: y - 21, width: W - 2 * ML, height: 23, color: ASoft });
+      page.drawRectangle({ x: ML, y: y - 21, width: 3, height: 23, color: A });
+      txt(`${gi + 1}.  ${g.cat}${cont ? " (suite)" : ""}`, ML + 12, y - 14, { size: 10, f: bold, color: A });
+      txt("Sous-total " + money(g.sum), X.tot, y - 14, { size: 9, f: bold, color: A, right: true });
+      y -= 27;
     };
-    for (const l of lignes) {
-      const cat = String(l.categorie || "").trim();
-      if (cat !== curCat) {
-        closeCat(); curCat = cat; catSum = 0;
-        if (cat) { if (y - 36 < botM) { newPage(); header(); } txt(cat, ML + 6, y - 11, { size: 10, f: bold, color: A }); y -= 21; }
-      }
-      const ht = r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
-      catSum += ht;
-      const tv = r2((ht * Number(l.taux_tva)) / 100);
-      const k = String(Number(l.taux_tva));
-      byRate[k] ||= { ht: 0, tva: 0 };
-      byRate[k].ht += ht;
-      byRate[k].tva += tv;
-      const lines = wrap(l.designation, font, 9.5, designW);
-      const dl = l.description ? String(l.description).split("\n").flatMap((p) => wrap(p, font, 8.5, designW)) : [];
-      const rh = lines.length * 12.5 + dl.length * 11 + 9;
-      if (y - rh < botM) { newPage(); header(); }
-      lines.forEach((ll, i) => txt(ll, ML + 6, y - 11 - i * 12.5, { size: 9.5 }));
-      dl.forEach((ll, i) => txt(ll, ML + 6, y - 11 - lines.length * 12.5 - i * 11, { size: 8.5, color: GREY }));
-      const q = Number(l.quantite);
-      txt(fmtNum(q, Number.isInteger(q) ? 0 : 2), X.qte, y - 11, { right: true });
-      txt(l.unite || "", X.unite, y - 11, { color: GREY });
-      txt(fmtNum(l.prix_unitaire_ht, 2), X.pu, y - 11, { right: true });
-      txt(fmtNum(l.taux_tva, Number(l.taux_tva) % 1 ? 1 : 0) + " %", X.tva, y - 11, { right: true, color: GREY });
-      txt(fmtNum(ht, 2), X.tot, y - 11, { right: true, f: bold });
-      y -= rh;
-      page.drawLine({ start: { x: ML, y: y + 2 }, end: { x: W - ML, y: y + 2 }, thickness: 0.5, color: LINE });
-    }
-    closeCat();
-    y -= 14;
+    const byRate = {};
+    groups.forEach((g, gi) => {
+      if (g.cat) { if (y - 80 < botM) { newPage(); header(); } band(g, gi, false); }
+      g.items.forEach((l, li) => {
+        const ht = lht(l), tv = r2((ht * Number(l.taux_tva)) / 100), k = String(Number(l.taux_tva));
+        byRate[k] ||= { ht: 0, tva: 0 };
+        byRate[k].ht += ht;
+        byRate[k].tva += tv;
+        const lines = wrap(l.designation, font, 9.5, designW);
+        const dl = l.description ? String(l.description).split("\n").flatMap((p) => wrap(p, font, 8.5, designW)) : [];
+        const rh = lines.length * 12.5 + dl.length * 11 + 11;
+        if (y - rh < botM) { newPage(); header(); if (g.cat) band(g, gi, true); }
+        if (li % 2 === 1) page.drawRectangle({ x: ML, y: y - rh + 2, width: W - 2 * ML, height: rh, color: ZEBRA });
+        txt(`${gi + 1}.${li + 1}`, X.n, y - 11, { size: 8.5, color: GREY });
+        lines.forEach((ll, i) => txt(ll, designX, y - 11 - i * 12.5, { size: 9.5 }));
+        dl.forEach((ll, i) => txt(ll, designX, y - 11 - lines.length * 12.5 - i * 11, { size: 8.5, color: GREY }));
+        const q = Number(l.quantite);
+        txt(fmtNum(q, Number.isInteger(q) ? 0 : 2), X.qte, y - 11, { right: true });
+        txt(l.unite || "", X.unite, y - 11, { color: GREY });
+        txt(fmtNum(l.prix_unitaire_ht, 2), X.pu, y - 11, { right: true });
+        txt(fmtNum(l.taux_tva, Number(l.taux_tva) % 1 ? 1 : 0) + " %", X.tva, y - 11, { right: true, color: GREY });
+        txt(fmtNum(ht, 2), X.tot, y - 11, { right: true, f: bold });
+        y -= rh;
+        page.drawLine({ start: { x: ML, y: y + 2 }, end: { x: W - ML, y: y + 2 }, thickness: 0.4, color: LINE });
+      });
+      y -= 6;
+    });
+    y -= 8;
 
     // ---- Totaux ----
     const rates = Object.keys(byRate).sort((a, b) => b - a);
-    const tot = [["Total HT", money(data.ht)], ...rates.map((k) => ["TVA " + fmtNum(k, k % 1 ? 1 : 0) + " %", money(byRate[k].tva)])];
+    const tot = [["Total HT", money(data.ht)], ...rates.map((k) => [`TVA ${fmtNum(k, k % 1 ? 1 : 0)} %  (base ${money(byRate[k].ht)})`, money(byRate[k].tva)])];
     if (!rates.length) tot.push(["TVA", money(data.tva)]);
     const paye = Number(data.paye || 0);
-    const rows = tot.length + 1 + (kind === "facture" && paye > 0 ? 2 : 0);
-    need(rows * 17 + 10);
-    const tx = W - ML - 215;
+    const nrows = tot.length + 2 + (kind === "facture" && paye > 0 ? 2 : 0);
+    need(nrows * 17 + 24);
+    const tx = W - ML - 235;
     for (const [k, v] of tot) {
-      txt(k, tx, y - 10, { size: 9.5, color: GREY });
+      txt(k, tx, y - 10, { size: 9, color: GREY });
       txt(v, W - ML - 6, y - 10, { size: 9.5, right: true });
       y -= 17;
     }
-    page.drawRectangle({ x: tx - 6, y: y - 20, width: 221 + 0, height: 24, color: ASoft });
-    txt("Total TTC", tx, y - 12, { size: 11, f: bold, color: A });
-    txt(money(data.ttc), W - ML - 6, y - 12, { size: 11.5, f: bold, color: A, right: true });
-    y -= 30;
+    y -= 4;
+    page.drawRectangle({ x: tx - 8, y: y - 24, width: 243, height: 30, color: A });
+    txt("TOTAL TTC", tx, y - 13, { size: 10, f: bold, color: WHITE });
+    txt(money(data.ttc), W - ML - 6, y - 14, { size: 13, f: bold, color: WHITE, right: true });
+    y -= 40;
     if (kind === "facture" && paye > 0) {
       txt("Déjà réglé", tx, y - 6, { size: 9.5, color: GREY });
       txt("- " + money(paye), W - ML - 6, y - 6, { size: 9.5, right: true });
@@ -282,7 +309,7 @@ const PilotPdf = (() => {
     const para = (label, text) => {
       const ls = wrap(text, font, 8.5, W - 2 * ML);
       need(ls.length * 11.5 + 24);
-      txt(label.toUpperCase(), ML, y - 8, { size: 7.5, f: bold, color: GREY });
+      txt(label.toUpperCase(), ML, y - 8, { size: 7.5, f: bold, color: A });
       y -= 18;
       for (const l of ls) { txt(l, ML, y - 2, { size: 8.5 }); y -= 11.5; }
       y -= 8;
@@ -297,13 +324,15 @@ const PilotPdf = (() => {
       if (ent.iban) para("Règlement par virement", `IBAN : ${ent.iban}${ent.bic ? "   -   BIC : " + ent.bic : ""}\nMerci de rappeler le numéro de facture ${data.numero || ""} en référence.`);
     } else {
       para("Conditions", `Devis valable ${data.validite_jours || 30} jours à compter de sa date d'émission. Les travaux débuteront après réception du devis daté et signé.`);
-      need(92);
-      const sy = y;
-      page.drawRectangle({ x: ML, y: sy - 78, width: 260, height: 80, borderColor: LINE, borderWidth: 0.8 });
-      txt("Bon pour accord", ML + 10, sy - 16, { size: 9, f: bold });
-      txt("Date, signature précédée de la mention", ML + 10, sy - 29, { size: 8, color: GREY });
-      txt("« Bon pour accord »", ML + 10, sy - 40, { size: 8, color: GREY });
-      y = sy - 90;
+      need(104);
+      const sy = y, bw = (W - 2 * ML - 20) / 2;
+      [["Le client", "Date et signature, précédées de « Bon pour accord »"], ["L'entreprise", ent.nom || "Cachet et signature"]].forEach(([t, sub], i) => {
+        const bx = ML + i * (bw + 20);
+        page.drawRectangle({ x: bx, y: sy - 84, width: bw, height: 86, borderColor: LINE, borderWidth: 0.8 });
+        txt(t, bx + 10, sy - 16, { size: 9, f: bold, color: A });
+        txt(sub, bx + 10, sy - 29, { size: 7.5, color: GREY });
+      });
+      y = sy - 96;
     }
 
     // ---- Pieds de page ----

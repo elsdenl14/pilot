@@ -359,3 +359,14 @@ tr.cs td{color:var(--mut);font-size:12px}
 .ld{white-space:normal}
 .echr{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;margin-bottom:8px}
 @media (max-width:640px){.echr{grid-template-columns:1fr}}
+
+/* ---- Aperçu du document : devis / facture ---- */
+.doc-top{border-bottom:3px solid var(--acc);padding-bottom:14px}
+.doc-recap{background:var(--in);border-left:3px solid var(--acc);padding:12px 16px;margin:0 0 18px}
+.doc-recap>b{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--acc);margin-bottom:6px}
+.doc-recap>div{display:flex;justify-content:space-between;gap:16px;padding:3px 0;border-top:1px solid var(--line)}
+table.dt thead th{background:var(--acc);color:#fff}
+table.dt td.n,table.dt th.n{width:44px;color:var(--mut);font-size:12px}
+table.dt tbody tr:nth-child(even):not(.cc){background:var(--in)}
+tr.cc td{background:var(--accb,var(--in));color:var(--acc);border-left:3px solid var(--acc)}
+.totaux .ttc{background:var(--acc);color:#fff;padding:8px 12px}
