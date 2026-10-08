@@ -109,12 +109,38 @@ const ACT = {
 
   clientNew: () => guard() && clientForm(),
   clientEdit: (id) => guard() && clientForm(byId(db.clients, id)),
-  clientDel: (id) => del("clients", id, "Supprimer ce client ?", "clients", "Client supprimé."),
+  clientDel: async (id) => {
+    if (!guard()) return;
+    const c = byId(db.clients, id), fa = db.factures.filter((f) => f.client_id === id), dv = db.devis.filter((d) => d.client_id === id), ch = db.chantiers.filter((x) => x.client_id === id);
+    const em = fa.filter((f) => f.statut !== "Brouillon");
+    if (em.length) return toast(`Suppression impossible : ${esc(c.nom)} a ${em.length} facture${em.length > 1 ? "s" : ""} émise${em.length > 1 ? "s" : ""}, à conserver pour la comptabilité. Vous pouvez modifier la fiche.`, "dn");
+    const l = [dv.length && `${dv.length} devis`, fa.length && `${fa.length} brouillon${fa.length > 1 ? "s" : ""} de facture`, ch.length && `${ch.length} chantier${ch.length > 1 ? "s" : ""}`].filter(Boolean);
+    if (!confirm(`Supprimer « ${c.nom} » ?${l.length ? `\n\nSeront aussi supprimés : ${l.join(", ")}.` : ""}\n\nCette action est définitive.`)) return;
+    for (const f of fa) await q(sb.from("factures").delete().eq("id", f.id));
+    for (const d of dv) await q(sb.from("devis").delete().eq("id", d.id));
+    for (const x of ch) { await q(sb.from("depenses").update({ chantier_id: null }).eq("chantier_id", x.id)); await q(sb.from("chantiers").delete().eq("id", x.id)); }
+    await q(sb.from("clients").delete().eq("id", id));
+    toast("Client supprimé.");
+    await refresh();
+    go("clients");
+  },
   chantierNew: (id, arg) => guard() && chantierForm(null, arg?.startsWith("client:") ? arg.slice(7) : ""),
   chantierEdit: (id) => guard() && chantierForm(byId(db.chantiers, id)),
-  chantierDel: (id) => del("chantiers", id, "Supprimer ce chantier ?", "chantiers", "Chantier supprimé."),
+  chantierDel: async (id) => {
+    if (!guard()) return;
+    const c = byId(db.chantiers, id), fa = db.factures.filter((f) => f.chantier_id === id), dv = db.devis.filter((d) => d.chantier_id === id), dp = db.depenses.filter((d) => d.chantier_id === id);
+    const em = fa.filter((f) => f.statut !== "Brouillon");
+    if (em.length) return toast(`Suppression impossible : ce chantier a ${em.length} facture${em.length > 1 ? "s" : ""} émise${em.length > 1 ? "s" : ""}, à conserver pour la comptabilité. Passez-le plutôt en « Terminé ».`, "dn");
+    const n = fa.length + dv.length + dp.length;
+    if (!confirm(`Supprimer le chantier « ${c.nom} » ?${n ? `\n\nLes ${n} document${n > 1 ? "s" : ""} et dépense${n > 1 ? "s" : ""} rattaché${n > 1 ? "s" : ""} sont conservés, mais ne seront plus liés à un chantier.` : ""}`)) return;
+    for (const t of ["devis", "factures", "depenses"]) await q(sb.from(t).update({ chantier_id: null }).eq("chantier_id", id));
+    await q(sb.from("chantiers").delete().eq("id", id));
+    toast("Chantier supprimé.");
+    await refresh();
+    go("chantiers");
+  },
 
-  payNew: (id) => payForm(id || ""),
+  payNew: (id, arg) => payForm(id || "", arg),
   payDel: (id) => del("paiements", id, "Supprimer ce paiement ?"),
   depNew: (id, arg) => depForm(null, { chantier: arg?.startsWith("chantier:") ? arg.slice(9) : "" }),
   depImport: () => depImport(),

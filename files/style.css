@@ -347,3 +347,15 @@ textarea { resize: vertical; }
 }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
 @media print { aside, .top, .pa, .ph .pa { display: none !important; } .app { display: block; } }
+
+/* ---- Catégories, descriptions, échéancier ---- */
+.cat{border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+.cat-h{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.cat-h input{flex:1;font-weight:600}
+.cat-sub{color:var(--mut);font-size:12px;white-space:nowrap}
+.lr textarea{display:block;width:100%;margin-top:4px;font-size:12px;resize:vertical;min-height:30px}
+tr.cc td{font-weight:600;background:var(--in)}
+tr.cs td{color:var(--mut);font-size:12px}
+.ld{white-space:normal}
+.echr{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px;margin-bottom:8px}
+@media (max-width:640px){.echr{grid-template-columns:1fr}}

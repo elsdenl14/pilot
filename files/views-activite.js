@@ -141,7 +141,11 @@ V.home = () => {
   // échéances des 14 prochains jours
   const h = addDays(t, 14);
   const ech = [
-    ...ouvertes().filter((f) => f.echeance >= t && f.echeance <= h).map((f) => ({ d: f.echeance, l: f.client_nom, s: f.numero, m: f.reste, go: `factures/${f.id}` })),
+    ...ouvertes().flatMap((f) => {
+      const l = echStatut(f).filter((e) => e.reste > 0.005);
+      const it = l.length ? l.map((e) => ({ d: e.date_echeance, l: f.client_nom, s: `${f.numero} · ${e.libelle || "échéance"}`, m: e.reste, go: `factures/${f.id}` })) : [{ d: f.echeance, l: f.client_nom, s: f.numero, m: f.reste, go: `factures/${f.id}` }];
+      return it.filter((x) => x.d >= t && x.d <= h);
+    }),
     ...aPayer.filter((x) => x.echeance && x.echeance >= t && x.echeance <= h).map((x) => ({ d: x.echeance, l: x.fournisseur, s: "À payer", m: -x.montant_ttc, go: `depenses/${x.id}` })),
   ].sort((a, b) => a.d.localeCompare(b.d));
 
@@ -213,7 +217,7 @@ function chantierDetail(id) {
   const s = chStats(c);
   const devis = db.devis.filter((d) => d.chantier_id === id), fact = db.factures.filter((f) => f.chantier_id === id), deps = db.depenses.filter((d) => d.chantier_id === id);
   return page(`${esc(c.nom)} ${chip(c.statut)}`, `${esc(c.client_nom)}${c.ville ? " · " + esc(c.ville) : ""}`,
-    btn("Modifier", "chantierEdit", id, "", "o w") + btn("Nouveau devis", "devisNew", "", "chantier:" + id, "w") + btn("Nouvelle facture", "factureNew", "", "chantier:" + id, "o w"),
+    btn("Modifier", "chantierEdit", id, "", "o w") + btn("Nouveau devis", "devisNew", "", "chantier:" + id, "w") + btn("Nouvelle facture", "factureNew", "", "chantier:" + id, "o w") + btn("Supprimer", "chantierDel", id, "", "dn-o w"),
     `${strip([
       ["Marché", E(c.montant_marche), "montant convenu"],
       ["Facturé HT", E(s.factureHT), `${E(s.encaisse)} encaissés (TTC)`],
@@ -276,7 +280,7 @@ function clientDetail(id) {
   if (!c) return `<div class="empty"><h2>Client introuvable</h2><button class="btn" data-go="clients">Retour aux clients</button></div>`;
   const devis = db.devis.filter((d) => d.client_id === id), fact = db.factures.filter((f) => f.client_id === id), chs = db.chantiers.filter((x) => x.client_id === id);
   return page(`${esc(c.nom)} ${chip(c.type)}`, c.ville ? esc(c.ville) : "",
-    btn("Modifier", "clientEdit", id, "", "o w") + btn("Nouveau devis", "devisNew", "", "client:" + id, "w") + btn("Nouvelle facture", "factureNew", "", "client:" + id, "o w"),
+    btn("Modifier", "clientEdit", id, "", "o w") + btn("Nouveau devis", "devisNew", "", "client:" + id, "w") + btn("Nouvelle facture", "factureNew", "", "client:" + id, "o w") + btn("Supprimer", "clientDel", id, "", "dn-o w"),
     `${strip([
       ["CA HT", E(c.ca), "factures émises"],
       ["À encaisser", E(c.a_encaisser), "TTC, factures ouvertes", c.a_encaisser ? "dn" : ""],

@@ -71,7 +71,19 @@ function docPreview(K, d, lignes) {
   const by = totauxParTaux(lignes, d);
   const rates = Object.keys(by).sort((a, b) => b - a);
   const rows = lignes.length
-    ? lignes.map((l) => `<tr><td>${esc(l.designation)}</td><td class="r">${fmtNum(l.quantite, Number.isInteger(l.quantite) ? 0 : 2)} ${esc(l.unite || "")}</td><td class="r">${fmtNum(l.prix_unitaire_ht)}</td><td class="r">${fmtNum(l.taux_tva, l.taux_tva % 1 ? 1 : 0)} %</td><td class="r"><b>${fmtNum(r2(l.quantite * l.prix_unitaire_ht))}</b></td></tr>`).join("")
+    ? (() => {
+      let cur = "", sub = 0, out = "";
+      const close = () => { if (cur) out += `<tr class="cs"><td colspan="4" class="r">Sous-total ${esc(cur)}</td><td class="r"><b>${fmtNum(sub)}</b></td></tr>`; };
+      for (const l of lignes) {
+        const c = String(l.categorie || "").trim();
+        if (c !== cur) { close(); cur = c; sub = 0; if (c) out += `<tr class="cc"><td colspan="5">${esc(c)}</td></tr>`; }
+        const ht = r2(l.quantite * l.prix_unitaire_ht);
+        sub += ht;
+        out += `<tr><td>${esc(l.designation)}${l.description ? `<small class="ld">${esc(l.description).replace(/\n/g, "<br>")}</small>` : ""}</td><td class="r">${fmtNum(l.quantite, Number.isInteger(l.quantite) ? 0 : 2)} ${esc(l.unite || "")}</td><td class="r">${fmtNum(l.prix_unitaire_ht)}</td><td class="r">${fmtNum(l.taux_tva, l.taux_tva % 1 ? 1 : 0)} %</td><td class="r"><b>${fmtNum(ht)}</b></td></tr>`;
+      }
+      close();
+      return out;
+    })()
     : `<tr><td colspan="5" class="mut">Aucune ligne détaillée (montant global).</td></tr>`;
   const paye = K === "facture" ? d.paye : 0;
   return `<div class="doc">
@@ -130,15 +142,16 @@ async function docDetail(K, id) {
   const payHtml = K === "facture" && paiements.length
     ? card("Paiements reçus", paiements.map((x) => `<div class="row"><div><b>${E2(x.montant)}</b><small>${D(x.date_paiement)} · ${esc(x.mode)}</small></div><button class="lk w" data-act="payDel" data-id="${x.id}">Supprimer</button></div>`).join(""))
     : "";
+  const echHtml = K === "facture" && d.statut !== "Annulée" ? echCard(d) : "";
   return page(`${esc(docNum(d, K))} ${chip(st)}`, `${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
-    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${payHtml}</div></div>`,
+    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${echHtml}${payHtml}</div></div>`,
     crumbs([K === "devis" ? "Devis" : "Factures", k.route], [docNum(d, K)]));
 }
 
-/* ---------- Éditeur (devis / facture) ---------- */
+/* ---------- Éditeur (devis / facture) : catégories > lignes (+ description) ---------- */
 function ligneRow(l = {}) {
   const tva = l.taux_tva ?? (Number(db.ent.taux_tva_defaut) || 20);
-  return `<tr class="lr"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="Description de la prestation"></td>
+  return `<tr class="lr"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="Désignation de la prestation"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea></td>
     <td style="width:78px"><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}"></td>
     <td style="width:86px"><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}"></td>
     <td style="width:104px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
@@ -146,18 +159,54 @@ function ligneRow(l = {}) {
     <td class="lt" style="width:100px"><span data-f="tot">0,00</span></td>
     <td style="width:34px"><button type="button" class="rm" data-rm title="Supprimer la ligne" aria-label="Supprimer la ligne">${svg(ic.x)}</button></td></tr>`;
 }
+// Regroupe les lignes consécutives qui ont la même catégorie
+function groupCats(ls) {
+  const out = [];
+  for (const l of ls.length ? ls : [{}]) {
+    const c = String(l.categorie || "").trim(), last = out[out.length - 1];
+    if (last && last.cat === c) last.lignes.push(l); else out.push({ cat: c, lignes: [l] });
+  }
+  return out;
+}
+const catBlock = (g) => `<section class="cat"><div class="cat-h"><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Nom de la catégorie (ex : Démolition, Plomberie…)" aria-label="Catégorie"><span class="num cat-sub" data-f="sub"></span><button type="button" class="rm" data-rmcat title="Supprimer la catégorie" aria-label="Supprimer la catégorie">${svg(ic.x)}</button></div>
+  <div class="tw"><table class="lines"><thead><tr><th>Désignation</th><th>Qté</th><th>Unité</th><th>P.U. HT</th><th>TVA</th><th class="r">Total HT</th><th></th></tr></thead><tbody class="lb">${g.lignes.map(ligneRow).join("")}</tbody></table></div>
+  <button type="button" class="btn o sm" data-addl>+ Ajouter une ligne</button></section>`;
 function readLignes(root) {
-  return $$(".lr", root).map((tr) => ({
-    designation: $('[data-f="des"]', tr).value.trim(), quantite: parseNum($('[data-f="qte"]', tr).value), unite: $('[data-f="uni"]', tr).value.trim() || "u",
-    prix_unitaire_ht: parseNum($('[data-f="pu"]', tr).value), taux_tva: Number($('[data-f="tva"]', tr).value),
-  }));
+  const out = [];
+  $$(".cat", root).forEach((sec) => {
+    const categorie = $('[data-f="cat"]', sec).value.trim();
+    $$(".lr", sec).forEach((tr) => out.push({
+      categorie, designation: $('[data-f="des"]', tr).value.trim(), description: $('[data-f="desc"]', tr).value.trim(),
+      quantite: parseNum($('[data-f="qte"]', tr).value), unite: $('[data-f="uni"]', tr).value.trim() || "u",
+      prix_unitaire_ht: parseNum($('[data-f="pu"]', tr).value), taux_tva: Number($('[data-f="tva"]', tr).value),
+    }));
+  });
+  return out;
 }
 function recalcLignes(root) {
   const ls = readLignes(root);
-  $$(".lr", root).forEach((tr, i) => { $('[data-f="tot"]', tr).textContent = fmtNum(r2(ls[i].quantite * ls[i].prix_unitaire_ht)); });
+  let i = 0;
+  $$(".cat", root).forEach((sec) => {
+    let s = 0;
+    $$(".lr", sec).forEach((tr) => { const l = ls[i++], t = r2(l.quantite * l.prix_unitaire_ht); s += t; $('[data-f="tot"]', tr).textContent = fmtNum(t); });
+    $('[data-f="sub"]', sec).textContent = "Sous-total " + E2(s);
+  });
   const by = totauxParTaux(ls.filter((l) => l.designation || l.prix_unitaire_ht));
   const ht = sum(Object.values(by), (x) => x.ht), tva = sum(Object.values(by), (x) => x.tva);
   $("#totbox", root).innerHTML = `<div><span>Total HT</span><span class="num">${E2(ht)}</span></div>${Object.keys(by).sort((a, b) => b - a).map((t) => `<div><span>TVA ${String(t).replace(".", ",")} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}<div class="ttc"><span>Total TTC</span><span class="num">${E2(ht + tva)}</span></div>`;
+}
+// Les colonnes categorie / description sont écrites après l'enregistrement (par position)
+async function saveCats(K, id, ls) {
+  const k = KD[K];
+  const rows = await q(sb.from(k.lt).select("id").eq(k.fk, id).order("position"));
+  await Promise.all(rows.map((r, i) => (ls[i] ? q(sb.from(k.lt).update({ categorie: ls[i].categorie || null, description: ls[i].description || null }).eq("id", r.id)) : null)));
+}
+async function copyCats(did, fid) {
+  try {
+    const a = await q(sb.from("devis_lignes").select("categorie,description").eq("devis_id", did).order("position"));
+    const b = await q(sb.from("factures_lignes").select("id").eq("facture_id", fid).order("position"));
+    await Promise.all(b.map((r, i) => (a[i] ? q(sb.from("factures_lignes").update({ categorie: a[i].categorie, description: a[i].description }).eq("id", r.id)) : null)));
+  } catch (e) { console.warn("Catégories non copiées", e); }
 }
 
 async function docForm(K, d, opts = {}) {
@@ -172,30 +221,36 @@ async function docForm(K, d, opts = {}) {
     ${fld({ k: "chantier_id", l: "Chantier", t: "select", o: chOpts(preClient || db.clients[0]?.id), v: opts.chantier || d?.chantier_id || "", r: 0 })}
     ${fld({ k: "date", l: K === "devis" ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
     ${K === "devis" ? fld({ k: "validite_jours", l: "Validité (jours)", t: "number", v: d?.validite_jours || 30 }) : fld({ k: "echeance", l: "Échéance de paiement", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}
-    <div class="full"><div class="tw"><table class="lines"><thead><tr><th>Description</th><th>Qté</th><th>Unité</th><th>P.U. HT</th><th>TVA</th><th class="r">Total HT</th><th></th></tr></thead><tbody id="lbody">${(lignes.length ? lignes : [{}]).map(ligneRow).join("")}</tbody></table></div>
-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:8px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addl">+ Ajouter une ligne</button><div class="totbox" id="totbox"></div></div></div>
+    <div class="full"><div id="cats">${groupCats(lignes).map(catBlock).join("")}</div>
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addc">+ Ajouter une catégorie</button><div class="totbox" id="totbox"></div></div></div>
     ${fld({ k: "notes", l: "Remarques (apparaissent sur le document)", t: "textarea", v: d?.notes || "", r: 0, cls: "full" })}
   </div>`;
   modal(d ? `Modifier ${esc(docNum(d, K))}` : `Nouveau ${k.label.toLowerCase()}`, body, {
     xl: true, wide: true, submit: d ? "Enregistrer" : "Créer le brouillon",
     onMount: (m) => {
       bindClientBlock(m, (cid) => { const s = $("#f_chantier_id", m); s.innerHTML = chOpts(cid === "__new" ? "none" : cid).map((o) => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join(""); });
-      const lb = $("#lbody", m);
-      m.addEventListener("input", (e) => { if (e.target.closest(".lr")) recalcLignes(m); });
+      m.addEventListener("input", (e) => { if (e.target.closest(".cat")) recalcLignes(m); });
       m.addEventListener("click", (e) => {
-        if (e.target.closest("#addl")) { lb.insertAdjacentHTML("beforeend", ligneRow({ taux_tva: Number($('[data-f="tva"]', lb.lastElementChild)?.value) || undefined })); $$('[data-f="des"]', lb).pop().focus(); recalcLignes(m); }
-        const rm = e.target.closest("[data-rm]");
-        if (rm) { if ($$(".lr", m).length > 1) rm.closest("tr").remove(); else $$("input", rm.closest("tr")).forEach((i) => (i.value = "")); recalcLignes(m); }
+        const t = e.target;
+        if (t.closest("#addc")) { $("#cats", m).insertAdjacentHTML("beforeend", catBlock({ cat: "", lignes: [{}] })); $$('[data-f="cat"]', m).pop().focus(); }
+        const al = t.closest("[data-addl]");
+        if (al) { const lb = $(".lb", al.closest(".cat")); lb.insertAdjacentHTML("beforeend", ligneRow({ taux_tva: Number($('[data-f="tva"]', lb.lastElementChild)?.value) || undefined })); $$('[data-f="des"]', lb).pop().focus(); }
+        const rc = t.closest("[data-rmcat]");
+        if (rc) { const sec = rc.closest(".cat"); if ($$(".cat", m).length > 1) sec.remove(); else { $$("input,textarea", sec).forEach((i) => (i.value = "")); $$(".lr", sec).slice(1).forEach((r) => r.remove()); } }
+        const rm = t.closest("[data-rm]");
+        if (rm) { const lb = rm.closest(".lb"); if ($$(".lr", lb).length > 1) rm.closest("tr").remove(); else $$("input,textarea", rm.closest("tr")).forEach((i) => (i.value = "")); }
+        recalcLignes(m);
       });
       recalcLignes(m);
     },
     onSubmit: async (v, api) => {
       const ls = readLignes(api.el).filter((l) => l.designation || l.prix_unitaire_ht);
-      if (!ls.length) throw new Error("Ajoutez au moins une ligne avec une description et un prix.");
+      if (!ls.length) throw new Error("Ajoutez au moins une ligne avec une désignation et un prix.");
       const cid = await resolveClient(v);
       const payload = { id: d?.id || null, client_id: cid, chantier_id: v.chantier_id || null, date: v.date, notes: v.notes || null, lignes: ls,
         ...(K === "devis" ? { validite_jours: parseInt(v.validite_jours) || 30 } : { echeance: v.echeance }) };
       const id = await q(sb.rpc("sauver_document", { p_kind: K, p: payload }));
+      try { await saveCats(K, id, ls); } catch (e) { console.warn(e); toast("Document enregistré, mais les catégories et descriptions n'ont pas pu l'être : exécutez migration_v4.sql dans Supabase.", "dn"); }
       api.close();
       toast(d ? "Modifications enregistrées." : `${k.label} créé en brouillon.`, "ok");
       await refresh();
@@ -323,6 +378,7 @@ const docActions = {
   devisToFacture: async (id) => {
     const d = byId(db.devis, id);
     const fid = await q(sb.rpc("devis_vers_facture", { p_devis: id }));
+    await copyCats(id, fid);
     await refresh();
     toast(`Facture créée en brouillon depuis ${esc(d.numero)}. Vérifiez-la puis émettez-la.`, "ok");
     go("factures/" + fid);
@@ -342,3 +398,71 @@ const docActions = {
     await q(sb.from("factures").delete().eq("id", id)); toast("Facture supprimée."); await refresh(); go("factures");
   },
 };
+
+/* ---------- Échéancier : payer une facture en plusieurs fois ---------- */
+const echOf = (fid) => db.echeances.filter((e) => e.facture_id === fid);
+// Les paiements reçus remplissent les échéances dans l'ordre
+function echStatut(f) {
+  let rest = Number(f.paye) || 0;
+  const t = today();
+  return echOf(f.id).map((e) => {
+    const part = Math.min(e.montant, Math.max(0, rest));
+    rest = r2(rest - part);
+    const reste = r2(e.montant - part);
+    return { ...e, payeE: part, reste, etat: reste <= 0.005 ? "Payée" : part > 0 ? "Partiellement payée" : e.date_echeance < t ? "En retard" : "À venir" };
+  });
+}
+const prochEch = (f) => echStatut(f).find((e) => e.reste > 0.005);
+const payDefault = (f, a) => (a && Number(a) > 0 ? Math.min(Number(a), f.reste) : (prochEch(f)?.reste ?? f.reste));
+
+function echCard(f) {
+  const l = echStatut(f), ouvert = f.reste > 0.005 && f.statut !== "Brouillon";
+  const act = ouvert ? btn(l.length ? "Modifier" : "Payer en plusieurs fois", "echForm", f.id, "", "o sm w") : "";
+  if (!l.length) return ouvert ? card("Échéancier", `<p class="mut" style="margin:0;padding:16px 18px">Paiement en une fois. Pour un acompte ou des mensualités, utilisez « Payer en plusieurs fois » : chaque paiement reçu est suivi échéance par échéance.</p>`, act) : "";
+  return card("Échéancier de paiement", l.map((e) => `<div class="row"><div><b>${E2(e.montant)}</b><small>${esc(e.libelle || "Échéance")} · ${D(e.date_echeance)}</small></div><span>${chip(e.etat)} ${e.reste > 0.005 && ouvert ? btn("Encaisser", "payNew", f.id, String(e.reste), "o sm w") : ""}</span></div>`).join("") +
+    (ouvert ? `<div class="row"><button class="lk w" data-act="echDel" data-id="${f.id}">Supprimer l'échéancier</button></div>` : ""), act);
+}
+
+function echForm(fid) {
+  if (!guard()) return;
+  const f = byId(db.factures, fid), T = f.montant_ttc, ex = echOf(fid);
+  const gen = (n, ac, d0, step) => {
+    const out = [];
+    let rest = T;
+    if (ac > 0) { const a = r2((T * ac) / 100); out.push(a); rest = r2(T - a); }
+    const nn = ac > 0 ? n - 1 : n, part = r2(rest / nn);
+    for (let i = 0; i < nn; i++) out.push(i === nn - 1 ? r2(rest - part * (nn - 1)) : part);
+    return out.map((m, i) => ({ libelle: ac > 0 ? (i === 0 ? "Acompte" : i === out.length - 1 ? "Solde" : `Échéance ${i}`) : `Échéance ${i + 1}`, montant: m, date_echeance: addDays(d0, i * step) }));
+  };
+  const draw = (m, list) => {
+    $("#echl", m).innerHTML = list.map((e) => `<div class="echr"><input type="text" data-e="lib" value="${esc(e.libelle || "")}" aria-label="Libellé"><input type="date" data-e="d" value="${e.date_echeance}" aria-label="Date"><input type="text" inputmode="decimal" data-e="m" value="${String(e.montant).replace(".", ",")}" aria-label="Montant"></div>`).join("") + `<p class="mut" id="echs" style="margin:6px 0 0"></p>`;
+    sumUp(m);
+  };
+  const read = (m) => $$(".echr", m).map((r) => ({ libelle: $('[data-e="lib"]', r).value.trim(), date_echeance: $('[data-e="d"]', r).value, montant: parseNum($('[data-e="m"]', r).value) }));
+  const sumUp = (m) => { const s = r2(sum(read(m), (e) => e.montant)), ok = Math.abs(s - T) < 0.01; const el = $("#echs", m); el.className = ok ? "up" : "dn"; el.textContent = `Total des échéances : ${E2(s)} sur ${E2(T)} TTC${ok ? "" : ` (écart ${E2(r2(T - s))})`}`; };
+  const body = `<div class="frm">${fld({ k: "n", l: "Nombre d'échéances", t: "select", o: [2, 3, 4, 5, 6, 8, 10, 12].map(String), v: String(ex.length || 3) })}
+    ${fld({ k: "ac", l: "Acompte à la commande (%)", t: "number", v: ex.length ? "0" : "30", r: 0, hint: "0 = échéances égales" })}
+    ${fld({ k: "d0", l: "Première échéance", t: "date", v: ex[0]?.date_echeance || today() })}
+    ${fld({ k: "step", l: "Intervalle (jours)", t: "number", v: "30" })}<div class="full" id="echl"></div></div>`;
+  modal("Payer en plusieurs fois · " + esc(f.numero), body, {
+    wide: true, submit: "Enregistrer l'échéancier",
+    onMount: (m) => {
+      const regen = () => { const v = Object.fromEntries(new FormData(m.querySelector("form"))); draw(m, gen(Number(v.n) || 2, Math.min(95, parseNum(v.ac)), v.d0 || today(), parseInt(v.step) || 30)); };
+      ["n", "ac", "d0", "step"].forEach((k) => ($("#f_" + k, m).onchange = regen));
+      m.addEventListener("input", (e) => { if (e.target.closest(".echr")) sumUp(m); });
+      if (ex.length) draw(m, ex); else regen();
+    },
+    onSubmit: async (v, api) => {
+      const l = read(api.el);
+      if (l.some((e) => !e.date_echeance || e.montant <= 0)) throw new Error("Chaque échéance doit avoir une date et un montant.");
+      if (Math.abs(r2(sum(l, (e) => e.montant)) - T) >= 0.01) throw new Error(`Le total des échéances doit être égal au montant TTC (${E2(T)}).`);
+      await q(sb.from("facture_echeances").delete().eq("facture_id", fid));
+      await q(sb.from("facture_echeances").insert(l.map((e, i) => ({ facture_id: fid, position: i, libelle: e.libelle || null, date_echeance: e.date_echeance, montant: e.montant }))));
+      api.close(); toast("Échéancier enregistré.", "ok"); await refresh();
+    },
+  });
+}
+Object.assign(docActions, {
+  echForm: (id) => echForm(id),
+  echDel: async (id) => { if (!guard() || !confirm("Supprimer l'échéancier ? Les paiements déjà reçus sont conservés.")) return; await q(sb.from("facture_echeances").delete().eq("facture_id", id)); await refresh(); },
+});

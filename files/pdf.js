@@ -212,17 +212,33 @@ const PilotPdf = (() => {
     header();
     const lignes = data.lignes?.length ? data.lignes : data.ht > 0 ? [{ designation: "Prestation", quantite: 1, unite: "forfait", prix_unitaire_ht: data.ht, taux_tva: data.taux_tva ?? 20 }] : [];
     const byRate = {};
+    let curCat = "", catSum = 0;
+    const closeCat = () => {
+      if (!curCat) return;
+      if (y - 20 < botM) { newPage(); header(); }
+      txt("Sous-total " + curCat, X.pu + 40, y - 8, { size: 8.5, color: GREY, right: true });
+      txt(fmtNum(catSum, 2), X.tot, y - 8, { size: 9, f: bold, right: true });
+      y -= 20;
+    };
     for (const l of lignes) {
+      const cat = String(l.categorie || "").trim();
+      if (cat !== curCat) {
+        closeCat(); curCat = cat; catSum = 0;
+        if (cat) { if (y - 36 < botM) { newPage(); header(); } txt(cat, ML + 6, y - 11, { size: 10, f: bold, color: A }); y -= 21; }
+      }
       const ht = r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
+      catSum += ht;
       const tv = r2((ht * Number(l.taux_tva)) / 100);
       const k = String(Number(l.taux_tva));
       byRate[k] ||= { ht: 0, tva: 0 };
       byRate[k].ht += ht;
       byRate[k].tva += tv;
       const lines = wrap(l.designation, font, 9.5, designW);
-      const rh = lines.length * 12.5 + 9;
+      const dl = l.description ? String(l.description).split("\n").flatMap((p) => wrap(p, font, 8.5, designW)) : [];
+      const rh = lines.length * 12.5 + dl.length * 11 + 9;
       if (y - rh < botM) { newPage(); header(); }
       lines.forEach((ll, i) => txt(ll, ML + 6, y - 11 - i * 12.5, { size: 9.5 }));
+      dl.forEach((ll, i) => txt(ll, ML + 6, y - 11 - lines.length * 12.5 - i * 11, { size: 8.5, color: GREY }));
       const q = Number(l.quantite);
       txt(fmtNum(q, Number.isInteger(q) ? 0 : 2), X.qte, y - 11, { right: true });
       txt(l.unite || "", X.unite, y - 11, { color: GREY });
@@ -232,6 +248,7 @@ const PilotPdf = (() => {
       y -= rh;
       page.drawLine({ start: { x: ML, y: y + 2 }, end: { x: W - ML, y: y + 2 }, thickness: 0.5, color: LINE });
     }
+    closeCat();
     y -= 14;
 
     // ---- Totaux ----

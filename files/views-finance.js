@@ -90,7 +90,7 @@ function paiementsEnc(tabsHtml) {
       ["Délai moyen de paiement", delai === null ? "-" : delai + " j", "émission → paiement"],
     ]) +
       card("Factures à encaisser", tbl(["Facture", "Échéance", { h: "Reste dû", r: 1 }, ""],
-        ouv.map((f) => ({ go: `factures/${f.id}`, t: `${f.numero} ${f.client_nom}`, c: [`<strong>${esc(f.numero)}</strong><small>${esc(f.client_nom)}</small>`, `${D(f.echeance)}${f.statut_affiche === "En retard" ? ` <span class="chip dn">en retard</span>` : ""}`, `<span class="num">${E2(f.reste)}</span>`, `<span class="r">${btn("Encaisser", "payNew", f.id, "", "o sm w")}</span>`] })),
+        ouv.map((f) => ({ go: `factures/${f.id}`, t: `${f.numero} ${f.client_nom}`, c: [`<strong>${esc(f.numero)}</strong><small>${esc(f.client_nom)}</small>`, `${prochEch(f) ? `${D(prochEch(f).date_echeance)}<small>${esc(prochEch(f).libelle || "échéance")} : ${E2(prochEch(f).reste)}</small>` : D(f.echeance)}${f.statut_affiche === "En retard" ? ` <span class="chip dn">en retard</span>` : ""}`, `<span class="num">${E2(f.reste)}</span>`, `<span class="r">${btn("Encaisser", "payNew", f.id, "", "o sm w")}</span>`] })),
         "Aucune facture en attente de paiement.")) +
       card("Journal des encaissements", tbl(["Date", "Client / facture", "Mode", { h: "Montant", r: 1 }], rows, "Aucun paiement enregistré.")));
 }
@@ -115,19 +115,19 @@ function paiementsDep(tabsHtml) {
         "Aucune dépense. Importez une facture fournisseur (PDF) : Pilot lit le fournisseur, les montants et les dates pour vous.")));
 }
 
-function payForm(fid) {
+function payForm(fid, amount) {
   if (!guard()) return;
   const ouv = ouvertes();
   if (!ouv.length) return toast("Aucune facture émise à régler. Émettez d'abord une facture.", "dn");
   const sel = fid && ouv.find((f) => f.id === fid) ? fid : ouv[0].id;
   const body = `<div class="frm">
     ${fld({ k: "facture_id", l: "Facture", t: "select", o: ouv.map((f) => ({ v: f.id, l: `${f.numero} · ${f.client_nom} · reste ${E2(f.reste)}` })), v: sel, cls: "full" })}
-    ${fld({ k: "montant", l: "Montant reçu (€)", t: "number", v: String(byId(ouv, sel).reste).replace(".", ",") })}
+    ${fld({ k: "montant", l: "Montant reçu (€)", t: "number", v: String(payDefault(byId(ouv, sel), amount)).replace(".", ",") })}
     ${fld({ k: "date_paiement", l: "Date du paiement", t: "date", v: today() })}
     ${fld({ k: "mode", l: "Mode de règlement", t: "select", o: MODES })}
     ${fld({ k: "reference", l: "Référence (facultatif)", r: 0 })}</div>`;
   modal("Enregistrer un paiement", body, {
-    onMount: (m) => { $("#f_facture_id", m).onchange = (e) => { $("#f_montant", m).value = String(byId(ouv, e.target.value).reste).replace(".", ","); }; },
+    onMount: (m) => { $("#f_facture_id", m).onchange = (e) => { $("#f_montant", m).value = String(payDefault(byId(ouv, e.target.value))).replace(".", ","); }; },
     onSubmit: async (v, api) => {
       const f = byId(ouv, v.facture_id), m = parseNum(v.montant);
       if (m <= 0) throw new Error("Le montant doit être supérieur à zéro.");

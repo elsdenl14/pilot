@@ -23,7 +23,7 @@ let uid = null, // utilisateur connecté
 
 const emptyDb = () => ({
   clients: [], chantiers: [], devis: [], factures: [], paiements: [], depenses: [],
-  notifs: [], partages: [], docsCompta: [], acces: [], ent: {},
+  notifs: [], partages: [], docsCompta: [], acces: [], echeances: [], ent: {},
 });
 let db = emptyDb();
 
@@ -54,6 +54,10 @@ async function load() {
   db.ent = en || { nom: "", pdf_reglages: {}, tva_regime: "encaissements", tresorerie_initiale: 0, delai_paiement_jours: 30 };
   db.ent.tresorerie_initiale = Number(db.ent.tresorerie_initiale || 0);
   db.ent.pdf_reglages ||= {};
+  try {
+    db.echeances = await q(sb.from("facture_echeances").select("*").order("position"));
+    db.echeances.forEach((e) => nz(e, ["montant"]));
+  } catch (e) { db.echeances = []; }
 }
 
 /* ===================== Accès rapides aux données ===================== */
