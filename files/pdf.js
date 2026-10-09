@@ -402,6 +402,7 @@ const PilotPdf = (() => {
   const CATS = [
     ["Matériaux", /point\s*p|leroy|castorama|brico|bigmat|gedimat|tollens|cedeo|materiaux|matériaux|ciment|b[ée]ton|carrelage|peinture|bois\b|plaque|isolant|quincaillerie|sanitaire/i, "Achat"],
     ["Sous-traitance", /sous[-\s]*traitan|prestation de service|main d.?œuvre|int[ée]rim/i, "Achat"],
+    ["Main-d'œuvre", /$^/, "Dépense"],
     ["Outillage & matériel", /outillage|hilti|facom|location de mat|loxam|kiloutou|mat[ée]riel/i, "Dépense"],
     ["Carburant & déplacements", /carburant|gazole|diesel|essence|totalenergies|shell|esso|station|p[ée]age|vinci|sanef|parking/i, "Dépense"],
     ["Assurances", /assurance|axa|maif|mma|groupama|allianz|hiscox|d[ée]cennale/i, "Dépense"],

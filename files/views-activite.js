@@ -95,6 +95,14 @@ function priorites() {
       add("i", 130 - dd, d.fournisseur, dd === 0 ? "À payer aujourd'hui" : `À payer dans ${dd} jour${dd > 1 ? "s" : ""}`, d.montant_ttc,
         { label: "Marquer payée", act: "depPay", id: d.id }, `depenses/${d.id}`);
   }
+  // Rentabilité des chantiers (budget prévu vs réel)
+  if (db.v5)
+    for (const c of db.chantiers.filter((x) => x.statut !== "Terminé")) {
+      const f = chFin(c);
+      if (!f.lv) continue;
+      add(f.lv, { u: 320, i: 170, s: 60 }[f.lv] + Math.min(f.baisse, 60), `${c.nom} · ${finTitle(f)}`, finDetail(f), f.margeAct < 0 ? f.margeAct : 0,
+        { label: "Voir le suivi", act: "go", id: `chantiers/${c.id}` }, `chantiers/${c.id}`);
+    }
   // TVA
   try {
     const jour = Number(db.ent.jour_tva) || 20;
@@ -168,7 +176,7 @@ V.home = () => {
       ${card("Chantiers en cours",
         (() => {
           const l = db.chantiers.filter((c) => c.statut === "En cours" || c.statut === "À surveiller").slice(0, 5);
-          return l.length ? l.map((c) => `<div class="row lnk" data-go="chantiers/${c.id}" style="cursor:pointer"><div><b>${esc(c.nom)}</b><small>${esc(c.client_nom)}${c.ville ? " · " + esc(c.ville) : ""}</small></div>${chip(c.statut)}</div>`).join("") : `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Aucun chantier en cours.</p>`;
+          return l.length ? l.map((c) => `<div class="row lnk" data-go="chantiers/${c.id}" style="cursor:pointer"><div><b>${esc(c.nom)}</b><small>${esc(c.client_nom)}${c.ville ? " · " + esc(c.ville) : ""}</small></div><span>${chip(c.statut)}${finChip(c)}</span></div>`).join("") : `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Aucun chantier en cours.</p>`;
         })(),
         `<button class="lk" data-go="chantiers">Tous les chantiers ${svg(ic.ar)}</button>`)}
     </div>
@@ -202,7 +210,7 @@ V.chantiers = (r) => {
       go: `chantiers/${c.id}`, t: `${c.nom} ${c.client_nom} ${c.ville || ""}`,
       c: [`<strong>${esc(c.nom)}</strong><small>${esc(c.client_nom)}${c.ville ? " · " + esc(c.ville) : ""}</small>`,
         `<span class="num">${E(c.montant_marche)}</span>`, `<span class="num">${E(s.factureHT)}</span>`, `<span class="num">${E(s.couts)}</span>`,
-        `<span class="num ${s.marge < 0 ? "dn" : ""}">${s.factureHT || s.couts ? E(s.marge) : "-"}</span>`, chip(c.statut)],
+        `<span class="num ${s.marge < 0 ? "dn" : ""}">${s.factureHT || s.couts ? E(s.marge) : "-"}</span>`, chip(c.statut) + finChip(c)],
     };
   });
   const tabsHtml = tabs("chantiers", [["tous", "Tous"], ...CH_STATUTS.map((s) => [s, s])], cur);
@@ -218,7 +226,7 @@ function chantierDetail(id) {
   const devis = db.devis.filter((d) => d.chantier_id === id), fact = db.factures.filter((f) => f.chantier_id === id), deps = db.depenses.filter((d) => d.chantier_id === id);
   return page(`${esc(c.nom)} ${chip(c.statut)}`, `${esc(c.client_nom)}${c.ville ? " · " + esc(c.ville) : ""}`,
     btn("Modifier", "chantierEdit", id, "", "o w") + btn("Nouveau devis", "devisNew", "", "chantier:" + id, "w") + btn("Nouvelle facture", "factureNew", "", "chantier:" + id, "o w") + btn("Supprimer", "chantierDel", id, "", "dn-o w"),
-    `${strip([
+    `${db.v5 ? finCard(c) : strip([
       ["Marché", E(c.montant_marche), "montant convenu"],
       ["Facturé HT", E(s.factureHT), `${E(s.encaisse)} encaissés (TTC)`],
       ["Coûts HT", E(s.couts), `${deps.length} dépense${deps.length > 1 ? "s" : ""} rattachée${deps.length > 1 ? "s" : ""}`],
@@ -228,6 +236,7 @@ function chantierDetail(id) {
       ${card("Devis", docTable("devis", devis), "")}
       ${card("Factures", docTable("factures", fact), "")}
       ${card("Dépenses et achats", tbl(["Fournisseur", "Date", { h: "HT", r: 1 }, "Statut"], deps.map((d) => ({ go: `depenses/${d.id}`, c: [`<strong>${esc(d.fournisseur)}</strong><small>${esc(d.categorie || d.type)}</small>`, D(d.date_depense), `<span class="num">${E2(d.montant_ht)}</span>`, chip(d.statut)] })), "Aucune dépense rattachée à ce chantier."), btn("Ajouter", "depNew", "", "chantier:" + id, "o sm w"))}
+      ${achatsCard(c)}
     </div><div>
       ${card("Informations", `<dl class="kv"><dt>Client</dt><dd><a href="#/clients/${c.client_id}">${esc(c.client_nom)}</a></dd><dt>Adresse</dt><dd>${esc(c.adresse || "-")}</dd><dt>Ville</dt><dd>${esc(c.ville || "-")}</dd><dt>Début</dt><dd>${c.date_debut ? D(c.date_debut) : "-"}</dd><dt>Fin prévue</dt><dd>${c.date_fin ? D(c.date_fin) : "-"}</dd><dt>Notes</dt><dd>${esc(c.notes || "-").replace(/\n/g, "<br>")}</dd></dl>`)}
     </div></div>`,

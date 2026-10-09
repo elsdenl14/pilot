@@ -24,6 +24,7 @@ let uid = null, // utilisateur connecté
 const emptyDb = () => ({
   clients: [], chantiers: [], devis: [], factures: [], paiements: [], depenses: [],
   notifs: [], partages: [], docsCompta: [], acces: [], echeances: [], ent: {},
+  fournisseurs: [], budgets: [], achats: [], v5: false,
 });
 let db = emptyDb();
 
@@ -58,6 +59,18 @@ async function load() {
     db.echeances = await q(sb.from("facture_echeances").select("*").order("position"));
     db.echeances.forEach((e) => nz(e, ["montant"]));
   } catch (e) { db.echeances = []; }
+  // v5 : fournisseurs, budgets par chantier, achats (facultatif tant que migration_v5.sql n'est pas lancée)
+  try {
+    const [fo, bu, ac5] = await Promise.all([
+      q(sb.from("fournisseurs").select("*").order("nom")),
+      q(sb.from("chantier_budgets").select("*")),
+      q(sb.from("achats_fournisseurs").select("*").order("date_doc", { ascending: false })),
+    ]);
+    fo.forEach((f) => nz(f, ["delai_paiement_jours"]));
+    bu.forEach((b) => nz(b, ["materiaux", "main_oeuvre", "sous_traitance"]));
+    ac5.forEach((a) => nz(a, ["montant_ht", "montant_tva"]));
+    db.fournisseurs = fo; db.budgets = bu; db.achats = ac5; db.v5 = true;
+  } catch (e) { db.fournisseurs = []; db.budgets = []; db.achats = []; db.v5 = false; }
 }
 
 /* ===================== Accès rapides aux données ===================== */
@@ -83,6 +96,7 @@ const ic = {
   factures: "M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z M9 8h6 M9 12h6",
   paiements: "M3 6h18v12H3z M3 10h18 M7 15h3",
   compta: "M5 3h14v18H5z M8 7h8 M8 11h3 M13 11h3 M8 15h3 M13 15h3",
+  fournisseurs: "M3 7l9-4 9 4v13H3z M9 20v-6h6v6",
   analyses: "M4 20v-9 M10 20V4 M16 20v-7 M22 20H2",
   params: "M4 7h10 M18 7h2 M4 17h2 M10 17h10 M14 5v4 M6 15v4",
   bell: "M6 16v-5a6 6 0 0112 0v5l2 2H4z M10 21h4",
@@ -100,6 +114,7 @@ const NAV = [
   ["home", "Accueil", null],
   ["chantiers", "Chantiers", "Activité"],
   ["clients", "Clients", null],
+  ["fournisseurs", "Fournisseurs", null],
   ["devis", "Devis", null],
   ["factures", "Factures", null],
   ["paiements", "Paiements", "Finances"],
@@ -160,6 +175,11 @@ const CHIP = {
   "En cours": "ok", Accepté: "ok", Payée: "ok", Terminé: "ok",
   "À surveiller": "wn", Envoyé: "wn", Envoyée: "wn", "Partiellement payée": "wn", "À payer": "wn",
   "À facturer": "ac", "En retard": "dn", Refusé: "dn",
+  "En attente": "wn", Commandée: "ac", Livrée: "ok", Facturée: "n", Annulée: "n",
+};
+const trAttrs = (r) => {
+  const cls = [r.go || r.act ? "lnk" : "", r.cls || ""].filter(Boolean).join(" ");
+  return (r.go ? ` data-go="${r.go}"` : "") + (r.act ? ` data-act="${r.act}" data-id="${esc(r.id ?? "")}"` : "") + (cls ? ` class="${cls}"` : "");
 };
 const chip = (s) => `<span class="chip ${CHIP[s] || "n"}">${esc(s)}</span>`;
 const page = (title, sub, actions, body, crumb = "") =>
@@ -172,7 +192,7 @@ const crumbs = (...p) => `<nav class="bc">${p.map(([l, h]) => (h ? `<a href="#/$
 const tbl = (cols, rows, empty = "Rien à afficher pour le moment.") =>
   `<div class="tw"><table><thead><tr>${cols.map((c) => `<th${c.r ? ' class="r"' : ""}>${c.h ?? c}</th>`).join("")}</tr></thead><tbody>${
     rows.length
-      ? rows.map((r) => `<tr${r.go ? ` data-go="${r.go}" class="lnk"` : ""} data-t="${esc((r.t || "").toLowerCase())}">${r.c.map((x, i) => `<td${cols[i]?.r ? ' class="r"' : ""}>${x}</td>`).join("")}</tr>`).join("")
+      ? rows.map((r) => `<tr${trAttrs(r)} data-t="${esc((r.t || "").toLowerCase())}">${r.c.map((x, i) => `<td${cols[i]?.r ? ' class="r"' : ""}>${x}</td>`).join("")}</tr>`).join("")
       : `<tr><td colspan="${cols.length}" class="emp">${empty}</td></tr>`
   }</tbody></table></div>`;
 const searchBar = (ph, meta) =>

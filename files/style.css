@@ -370,3 +370,16 @@ table.dt td.n,table.dt th.n{width:44px;color:var(--mut);font-size:12px}
 table.dt tbody tr:nth-child(even):not(.cc){background:var(--in)}
 tr.cc td{background:var(--accb,var(--in));color:var(--acc);border-left:3px solid var(--acc)}
 .totaux .ttc{background:var(--acc);color:#fff;padding:8px 12px}
+
+/* ===== Suivi financier & achats (v5) ===== */
+.card.mb{margin-bottom:16px}
+.pbl{display:flex;align-items:center;gap:8px;min-width:110px}
+.pb{flex:1;height:7px;border-radius:99px;background:var(--line);overflow:hidden}
+.pb i{display:block;height:100%;background:var(--ok);border-radius:99px}
+.pb i.wn{background:var(--wn)}
+.pb i.dn{background:var(--dn)}
+.pbl small{font-variant-numeric:tabular-nums;color:var(--mut);min-width:38px;text-align:right}
+tr.tot td{font-weight:650;background:var(--sunk)}
+.fin-alert{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:10px;margin:0 0 14px;border:1px solid var(--line)}
+.fin-alert.u{background:var(--dnb);color:var(--dn);border-color:var(--dn)}
+.fin-alert.i{background:var(--wnb);color:var(--wn);border-color:var(--wn)}

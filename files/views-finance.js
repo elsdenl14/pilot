@@ -145,7 +145,7 @@ function depForm(d, opts = {}) {
   const pre = opts.prefill || {};
   const g = (k, dflt = "") => d?.[k] ?? pre[k] ?? dflt;
   const ht0 = g("montant_ht", ""), tva0 = g("montant_tva", "");
-  const rate = ht0 !== "" && tva0 !== "" && Number(ht0) > 0 ? (Number(tva0) / Number(ht0)) * 100 : 20;
+  const rate = opts.taux ?? (ht0 !== "" && tva0 !== "" && Number(ht0) > 0 ? (Number(tva0) / Number(ht0)) * 100 : 20);
   const known = RATES.find((x) => Math.abs(Number(x) - rate) < 0.25);
   const cats = PilotPdf.CATEGORIES;
   const cat0 = g("categorie", "Autre");
@@ -187,6 +187,7 @@ function depForm(d, opts = {}) {
       $("#f_categorie", m).onchange = (e) => { $("#f_type", m).value = ACHAT_CATS.has(e.target.value) ? "Achat" : "Dépense"; };
       const see = $("#seej", m);
       if (see) see.onclick = () => openFile(d.justificatif);
+      supplierHints(m, !d);
     },
     onSubmit: async (v, api) => {
       const htv = parseNum(v.montant_ht), tvv = parseNum(v.montant_tva);
@@ -199,6 +200,7 @@ function depForm(d, opts = {}) {
         date_paiement: v.statut === "Payée" ? v.date_paiement || today() : null, mode: v.statut === "Payée" ? v.mode : null, justificatif: path, notes: v.notes || null };
       if (d) await q(sb.from("depenses").update(row).eq("id", d.id));
       else await q(sb.from("depenses").insert(row));
+      if (!d) await offerInvoicedLink(row);
       api.close(); toast(d ? "Dépense modifiée." : "Dépense enregistrée.", "ok"); await refresh();
     },
   });
