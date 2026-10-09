@@ -15,7 +15,8 @@ const FIN_LINES = [
 const FIN_NAMES = { materiaux: "Matériaux", main_oeuvre: "Main-d'œuvre", sous_traitance: "Sous-traitance", autres: "Autres coûts" };
 const lineOf = (cat) => (FIN_LINES.find((x) => x.cat === cat) || { k: "autres" }).k;
 const ENGAGE = new Set(["Commandée", "Livrée"]); // commandes passées, pas encore facturées
-const SETUP_V5 = `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Pour activer ce module, exécutez <b>migration_v5.sql</b> dans Supabase (SQL Editor), puis rechargez la page.</p>`;
+const setupV5 = () =>
+  `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Pour activer ce module, exécutez <b>migration_v5.sql</b> dans Supabase (SQL Editor), puis rechargez la page.${db.v5err ? `<br><br>Erreur renvoyée par Supabase : <code>${esc(db.v5err)}</code>` : ""}</p>`;
 
 /* ===================== Suivi financier d'un chantier ===================== */
 // Prévu  = budget saisi sur le chantier.
@@ -170,7 +171,7 @@ V.fournisseurs = (r) => {
   const cur = ST.tab.fournisseurs || "liste";
   const t = tabs("fournisseurs", [["liste", "Fournisseurs"], ["commandes", "Devis et commandes"], ["factures", "Factures et dépenses"], ["echeances", "Échéances"], ["chantiers", "Budget par chantier"]], cur);
   if (!db.v5 && ["liste", "commandes", "chantiers"].includes(cur))
-    return page("Fournisseurs", SUP_SUB, "", t + card("", SETUP_V5));
+    return page("Fournisseurs", SUP_SUB, "", t + card("", setupV5()));
   return ({ liste: supTabListe, commandes: supTabCommandes, factures: supTabFactures, echeances: supTabEcheances, chantiers: supTabChantiers })[cur](t);
 };
 

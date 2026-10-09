@@ -69,8 +69,8 @@ async function load() {
     fo.forEach((f) => nz(f, ["delai_paiement_jours"]));
     bu.forEach((b) => nz(b, ["materiaux", "main_oeuvre", "sous_traitance"]));
     ac5.forEach((a) => nz(a, ["montant_ht", "montant_tva"]));
-    db.fournisseurs = fo; db.budgets = bu; db.achats = ac5; db.v5 = true;
-  } catch (e) { db.fournisseurs = []; db.budgets = []; db.achats = []; db.v5 = false; }
+    db.fournisseurs = fo; db.budgets = bu; db.achats = ac5; db.v5 = true; db.v5err = "";
+  } catch (e) { db.fournisseurs = []; db.budgets = []; db.achats = []; db.v5 = false; db.v5err = e?.message || String(e); }
 }
 
 /* ===================== Accès rapides aux données ===================== */
