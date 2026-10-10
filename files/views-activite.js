@@ -54,7 +54,7 @@ function priorites() {
   for (const f of enRetard()) {
     const d = daysBetween(f.echeance, t);
     add(d > 30 || f.reste >= 5000 ? "u" : "i", 300 + Math.min(d, 120) + Math.min(f.reste / 100, 80),
-      `${f.numero} · ${f.client_nom}`, `En retard de ${d} jour${d > 1 ? "s" : ""}, échue le ${D(f.echeance)}`, f.reste,
+      `${f.numero} · ${f.client_nom}`, `En retard de ${d} jour${d > 1 ? "s" : ""}, échue le ${D(f.echeance)}${typeof bkMatchFor === "function" && bkMatchFor(f) ? " · un virement correspondant est peut-être déjà arrivé en banque" : ""}`, f.reste,
       { label: "Relancer", act: "factureRelance", id: f.id }, `factures/${f.id}`);
   }
   for (const f of ouvertes()) {
@@ -103,6 +103,11 @@ function priorites() {
       add(f.lv, { u: 320, i: 170, s: 60 }[f.lv] + Math.min(f.baisse, 60), `${c.nom} · ${finTitle(f)}`, finDetail(f), f.margeAct < 0 ? f.margeAct : 0,
         { label: "Voir le suivi", act: "go", id: `chantiers/${c.id}` }, `chantiers/${c.id}`);
     }
+  // Banque : opérations à rapprocher
+  try {
+    const bp = typeof bkPriorite === "function" ? bkPriorite() : null;
+    if (bp) add(bp.lv, bp.score, bp.titre, bp.detail, bp.montant, { label: "Rapprocher", act: "go", id: "compta?tab=banque" }, "compta?tab=banque");
+  } catch (e) {}
   // TVA
   try {
     const jour = Number(db.ent.jour_tva) || 20;
@@ -238,6 +243,7 @@ function chantierDetail(id) {
       ${card("Dépenses et achats", tbl(["Fournisseur", "Date", { h: "HT", r: 1 }, "Statut"], deps.map((d) => ({ go: `depenses/${d.id}`, c: [`<strong>${esc(d.fournisseur)}</strong><small>${esc(d.categorie || d.type)}</small>`, D(d.date_depense), `<span class="num">${E2(d.montant_ht)}</span>`, chip(d.statut)] })), "Aucune dépense rattachée à ce chantier."), btn("Ajouter", "depNew", "", "chantier:" + id, "o sm w"))}
       ${achatsCard(c)}
     </div><div>
+      ${dcCard("chantier", id)}
       ${card("Informations", `<dl class="kv"><dt>Client</dt><dd><a href="#/clients/${c.client_id}">${esc(c.client_nom)}</a></dd><dt>Adresse</dt><dd>${esc(c.adresse || "-")}</dd><dt>Ville</dt><dd>${esc(c.ville || "-")}</dd><dt>Début</dt><dd>${c.date_debut ? D(c.date_debut) : "-"}</dd><dt>Fin prévue</dt><dd>${c.date_fin ? D(c.date_fin) : "-"}</dd><dt>Notes</dt><dd>${esc(c.notes || "-").replace(/\n/g, "<br>")}</dd></dl>`)}
     </div></div>`,
     crumbs(["Chantiers", "chantiers"], [c.nom]));
@@ -300,6 +306,7 @@ function clientDetail(id) {
       ${card("Devis", docTable("devis", devis))}
       ${card("Factures", docTable("factures", fact))}
     </div><div>
+      ${dcCard("client", id)}
       ${card("Coordonnées", `<dl class="kv"><dt>Email</dt><dd>${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : "-"}</dd><dt>Téléphone</dt><dd>${esc(c.telephone || "-")}</dd><dt>Adresse</dt><dd>${esc(c.adresse || "-")}</dd><dt>Ville</dt><dd>${esc(c.ville || "-")}</dd><dt>Notes</dt><dd>${esc(c.notes || "-").replace(/\n/g, "<br>")}</dd></dl>`)}
       ${card("Chantiers", chs.length ? chs.map((x) => `<div class="row lnk" data-go="chantiers/${x.id}" style="cursor:pointer"><div><b>${esc(x.nom)}</b><small>${esc(x.ville || "")}</small></div>${chip(x.statut)}</div>`).join("") : `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Aucun chantier.</p>`, btn("Ajouter", "chantierNew", "", "client:" + id, "o sm w"))}
     </div></div>`,

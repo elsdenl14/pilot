@@ -199,7 +199,10 @@ function depForm(d, opts = {}) {
         date_depense: v.date_depense, echeance: v.echeance || null, montant_ht: htv, montant_tva: tvv, statut: v.statut,
         date_paiement: v.statut === "Payée" ? v.date_paiement || today() : null, mode: v.statut === "Payée" ? v.mode : null, justificatif: path, notes: v.notes || null };
       if (d) await q(sb.from("depenses").update(row).eq("id", d.id));
-      else await q(sb.from("depenses").insert(row));
+      else {
+        const nd = await q(sb.from("depenses").insert(row).select("id").single());
+        await opts.onSaved?.(nd.id);
+      }
       if (!d) await offerInvoicedLink(row);
       api.close(); toast(d ? "Dépense modifiée." : "Dépense enregistrée.", "ok"); await refresh();
     },
@@ -251,9 +254,12 @@ const csvDl = (name, headers, rows) => downloadBlob(name, new Blob([toCsv(header
 const periodsOf = (gran) => gran === "t" ? [["T1", 0, 2], ["T2", 3, 5], ["T3", 6, 8], ["T4", 9, 11]] : MN.map((l, i) => [l, i, i]);
 const neg = (v, f = E) => (v < 0 ? `<span class="dn">${f(v)}</span>` : f(v));
 
-V.compta = () => {
+V.compta = (r) => {
+  // lien profond : #/compta?tab=banque (consommé une seule fois)
+  if (r?.qs?.get("tab")) { ST.tab.compta = r.qs.get("tab"); history.replaceState(null, "", "#/compta"); }
   const tab = ST.tab.compta || "synthese", y = ST.year;
-  const t = tabs("compta", [["synthese", "Synthèse"], ["journal", "Journal"], ["tva", "TVA"], ["comptable", "Espace comptable"]], tab);
+  const t = tabs("compta", [["synthese", "Synthèse"], ["banque", "Banque"], ["journal", "Journal"], ["tva", "TVA"], ["comptable", "Espace comptable"]], tab);
+  if (tab === "banque") return banqueTab(t);
   const yr = `<div class="seg"><button data-act="yearPrev" aria-label="Année précédente">‹</button><button disabled style="font-weight:600;color:var(--tx)">${y}</button><button data-act="yearNext" aria-label="Année suivante">›</button></div>`;
   const reg = (db.ent.tva_regime || "encaissements") === "debits" ? "sur les débits (à la facturation)" : "sur les encaissements (au paiement)";
   const note = `<p class="note">Chiffres estimés d'après vos factures, paiements et dépenses saisis dans Pilot. TVA collectée calculée ${reg}, réglable dans Paramètres. À valider avec votre comptable.</p>`;

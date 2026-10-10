@@ -25,6 +25,7 @@ const emptyDb = () => ({
   clients: [], chantiers: [], devis: [], factures: [], paiements: [], depenses: [],
   notifs: [], partages: [], docsCompta: [], acces: [], echeances: [], ent: {},
   fournisseurs: [], budgets: [], achats: [], v5: false,
+  documents: [], comptes: [], bankTx: [], v6: false, bkSug: null,
 });
 let db = emptyDb();
 
@@ -71,6 +72,24 @@ async function load() {
     ac5.forEach((a) => nz(a, ["montant_ht", "montant_tva"]));
     db.fournisseurs = fo; db.budgets = bu; db.achats = ac5; db.v5 = true; db.v5err = "";
   } catch (e) { db.fournisseurs = []; db.budgets = []; db.achats = []; db.v5 = false; db.v5err = e?.message || String(e); }
+  // v6 : documents déposés, comptes et opérations bancaires (facultatif tant que migration_v6.sql n'est pas lancée)
+  db.bkSug = null;
+  try {
+    const [dcs, cps] = await Promise.all([
+      q(sb.from("documents").select("*").order("created_at", { ascending: false })),
+      q(sb.from("banque_comptes").select("*").order("created_at")),
+    ]);
+    const tx = [];
+    for (let i = 0; i < 25; i++) {
+      const p = await q(sb.from("banque_transactions").select("*").order("date_op", { ascending: false }).order("id").range(i * 1000, i * 1000 + 999));
+      tx.push(...p);
+      if (p.length < 1000) break;
+    }
+    dcs.forEach((d) => nz(d, ["taille"]));
+    cps.forEach((c) => nz(c, ["solde_initial"]));
+    tx.forEach((t) => nz(t, ["montant"]));
+    db.documents = dcs; db.comptes = cps; db.bankTx = tx; db.v6 = true; db.v6err = "";
+  } catch (e) { db.documents = []; db.comptes = []; db.bankTx = []; db.v6 = false; db.v6err = e?.message || String(e); }
 }
 
 /* ===================== Accès rapides aux données ===================== */
@@ -106,6 +125,7 @@ const ic = {
   plus: "M12 5v14 M5 12h14",
   x: "M6 6l12 12 M18 6L6 18",
   file: "M6 3h9l4 4v14H6z",
+  documents: "M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z",
 };
 const svg = (p, c = "") =>
   `<svg class="${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${p}"/></svg>`;
@@ -117,6 +137,7 @@ const NAV = [
   ["fournisseurs", "Fournisseurs", null],
   ["devis", "Devis", null],
   ["factures", "Factures", null],
+  ["documents", "Documents", null],
   ["paiements", "Paiements", "Finances"],
   ["compta", "Comptabilité", null],
   ["analyses", "Analyses", "Pilotage"],
