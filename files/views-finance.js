@@ -227,7 +227,7 @@ async function openFile(path) {
 function depImport() {
   if (!guard()) return;
   const api = modal("Importer une facture fournisseur", `<p class="mut" style="margin:0">Choisissez la facture reçue (PDF). Pilot lit le fournisseur, les montants HT, TVA et TTC, les dates et propose une catégorie. Vous vérifiez, puis vous enregistrez.</p>
-    <div class="drop"><div><b>Facture fournisseur</b><small style="display:block" class="mut">PDF (lecture automatique) ou photo / scan (saisie manuelle, fichier conservé)</small></div><input type="file" id="impf" accept=".pdf,image/*" hidden><button type="button" class="btn" id="impb">Choisir un fichier</button></div><p class="mut" id="impst" style="margin:0"></p>`, { submit: false, noFocus: true });
+    <div class="drop"><div><b>Facture fournisseur</b><small style="display:block" class="mut">PDF (lecture automatique) ou photo / scan (saisie manuelle, fichier conservé)</small></div><input type="file" id="impf" accept=".pdf,.xml,image/*" hidden><button type="button" class="btn" id="impb">Choisir un fichier</button></div><p class="mut" id="impst" style="margin:0"></p>`, { submit: false, noFocus: true });
   const inp = $("#impf", api.el), st = $("#impst", api.el);
   $("#impb", api.el).onclick = () => inp.click();
   inp.onchange = async () => {
@@ -235,6 +235,8 @@ function depImport() {
     if (!f) return;
     st.textContent = "Lecture de la facture…";
     try {
+      const ei = await efReadIncoming(f).catch(() => null);
+      if (ei) return efIncomingToForm(f, ei, api);
       const r = await PilotPdf.extractSupplier(f);
       api.close();
       if (r.image || r.vide) {

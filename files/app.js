@@ -97,9 +97,11 @@ async function del(table, id, msg, after, done = "Supprimé.") {
 /* ---------- Actions (data-act) ---------- */
 const ACT = {
   ...docActions,
-  ...achatActions,
-  ...fileActions,
-  ...banqueActions,
+  ...(typeof ovActions !== "undefined" ? ovActions : {}),
+  ...(typeof signatureActions !== "undefined" ? signatureActions : {}),
+  ...(typeof efActions !== "undefined" ? efActions : {}),
+  ...(typeof scanActions !== "undefined" ? scanActions : {}),
+  ...(typeof connexionActions !== "undefined" ? connexionActions : {}),
   tab: (id, arg) => { ST.tab[id] = arg; return render(true); },
   period: (id, arg) => { ST.period = arg; return render(true); },
   gran: (id, arg) => { ST.gran = arg; return render(true); },

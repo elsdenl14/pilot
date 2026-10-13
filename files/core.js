@@ -26,6 +26,7 @@ const emptyDb = () => ({
   notifs: [], partages: [], docsCompta: [], acces: [], echeances: [], ent: {},
   fournisseurs: [], budgets: [], achats: [], v5: false,
   documents: [], comptes: [], bankTx: [], v6: false, bkSug: null,
+  efact: [], sigs: [], connexions: [], cx: {}, nbOuvrages: 0, v7: false,
 });
 let db = emptyDb();
 
@@ -90,7 +91,23 @@ async function load() {
     tx.forEach((t) => nz(t, ["montant"]));
     db.documents = dcs; db.comptes = cps; db.bankTx = tx; db.v6 = true; db.v6err = "";
   } catch (e) { db.documents = []; db.comptes = []; db.bankTx = []; db.v6 = false; db.v6err = e?.message || String(e); }
+  // v7 : bibliothèque d'ouvrages, signatures, factures électroniques, connexions bancaires (facultatif tant que migration_v7.sql n'est pas lancée)
+  try {
+    const [fe, sg, bc, cxr, oc] = await Promise.all([
+      q(sb.from("factures_electroniques").select("*").order("created_at", { ascending: false })),
+      q(sb.from("signatures").select("id,partage_token,devis_id,nom,hash_pdf,signed_at,chemin_pdf,user_agent").order("signed_at", { ascending: false })),
+      q(sb.from("banque_connexions").select("*").order("created_at")),
+      q(sb.from("clients").select("id,siret,tva_intracom")),
+      sb.from("ouvrages").select("id", { count: "exact", head: true }),
+    ]);
+    if (oc.error) throw oc.error;
+    db.efact = fe; db.sigs = sg; db.connexions = bc;
+    db.cx = Object.fromEntries(cxr.map((c) => [c.id, c]));
+    db.nbOuvrages = oc.count || 0; db.v7 = true; db.v7err = "";
+  } catch (e) { db.efact = []; db.sigs = []; db.connexions = []; db.cx = {}; db.nbOuvrages = 0; db.v7 = false; db.v7err = e?.message || String(e); }
 }
+const setupV7 = (what = "cette fonction") =>
+  `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Pour activer ${what}, exécutez <b>migration_v7.sql</b> dans Supabase (SQL Editor), puis rechargez la page.${db.v7err ? `<br><br>Erreur renvoyée par Supabase : <code>${esc(db.v7err)}</code>` : ""}</p>`;
 
 /* ===================== Accès rapides aux données ===================== */
 const byId = (arr, id) => arr.find((x) => x.id === id);
@@ -125,6 +142,8 @@ const ic = {
   plus: "M12 5v14 M5 12h14",
   x: "M6 6l12 12 M18 6L6 18",
   file: "M6 3h9l4 4v14H6z",
+  efacture: "M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h4 M15 15l2 2 3-3",
+  ouvrages: "M4 5h6v14H4z M14 5h6v14h-6z M6 9h2 M16 9h2",
   documents: "M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z",
 };
 const svg = (p, c = "") =>
@@ -137,6 +156,8 @@ const NAV = [
   ["fournisseurs", "Fournisseurs", null],
   ["devis", "Devis", null],
   ["factures", "Factures", null],
+  ["efacture", "Facture électronique", null],
+  ["ouvrages", "Bibliothèque", null],
   ["documents", "Documents", null],
   ["paiements", "Paiements", "Finances"],
   ["compta", "Comptabilité", null],
@@ -189,6 +210,14 @@ async function refresh() {
   await load();
   renderBell();
   await render(true);
+  afterLoadV7();
+}
+// Tâches de fond après chargement : archivage des devis signés, synchronisation bancaire
+function afterLoadV7() {
+  setTimeout(() => {
+    try { if (typeof sigAutoArchive === "function") sigAutoArchive(); } catch (e) { console.warn(e); }
+    try { if (typeof cxAutoSync === "function") cxAutoSync(); } catch (e) { console.warn(e); }
+  }, 1200);
 }
 
 /* ===================== Composants ===================== */
@@ -384,11 +413,13 @@ async function start(session) {
     $("#robadge").hidden = !ro;
     if (!ro) { try { await sb.rpc("generer_alertes"); } catch (e) { console.warn("alertes", e); } }
     await load();
+    try { if (typeof cxHandleReturn === "function") await cxHandleReturn(); } catch (e) { console.warn("retour banque", e); }
     $("#au")?.remove();
     renderBell();
     if (!location.hash) location.hash = "#/";
     await render();
     subscribeNotifs();
+    afterLoadV7();
   } catch (err) {
     console.error(err);
     authBox(`<div class="box"><div class="logo"><i>P</i>Pilot</div><h2>Erreur de chargement</h2><p class="er">${esc(friendly(err))}</p><p class="sub">Avez-vous exécuté <b>supabase/schema.sql</b> (version 2) dans le SQL Editor ?</p><button class="btn o" onclick="location.reload()">Réessayer</button></div>`);

@@ -117,6 +117,7 @@ async function docDetail(K, id) {
     else {
       if (d.reste > 0 && d.statut !== "Annulée") actions += btn("Enregistrer un paiement", "payNew", id, "", "w");
       if (d.statut !== "Annulée") actions += btn("Envoyer au client", "factureSend", id, "", "o w");
+      if (d.statut !== "Annulée" && db.v7) actions += btn("Facture électronique", "efOpen", id, "", "o");
       if (d.statut_affiche === "En retard") actions += btn("Relancer", "factureRelance", id, "", "o w");
       if (d.statut === "Envoyée" && !d.paye) actions += btn("Annuler", "factureAnnuler", id, "", "dn-o w");
     }
@@ -127,25 +128,26 @@ async function docDetail(K, id) {
     ${d.chantier_nom ? `<dt>Chantier</dt><dd><a href="#/chantiers/${d.chantier_id}">${esc(d.chantier_nom)}</a></dd>` : ""}
     <dt>${K === "devis" ? "Date" : "Émission"}</dt><dd>${D(d[k.df])}</dd>
     ${K === "facture" ? `<dt>Échéance</dt><dd>${D(d.echeance)}</dd>` : `<dt>Validité</dt><dd>${d.validite_jours} jours</dd>`}
-    ${dv ? `<dt>Devis d'origine</dt><dd><a href="#/devis/${dv.id}">${esc(dv.numero)}</a></dd>` : ""}</dl>`;
+    ${dv ? `<dt>Devis d'origine</dt><dd><a href="#/devis/${dv.id}">${esc(dv.numero)}</a></dd>` : ""}
+    ${K === "facture" && db.v7 && d.statut !== "Brouillon" ? `<dt>Facture électronique</dt><dd>${efChip(efOf(id))}</dd>` : ""}</dl>`;
   const partageHtml = p
     ? `<dl class="kv"><dt>Lien client</dt><dd><a href="${shareLink(p.token)}" target="_blank" rel="noopener">Ouvrir la page du client</a></dd>
         <dt>Consultation</dt><dd>${p.vu_at ? "Ouvert le " + new Date(p.vu_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "Pas encore ouvert"}</dd>
-        ${K === "devis" ? `<dt>Réponse</dt><dd>${p.accepte_at ? `<span class="chip ok">Accepté</span> par ${esc(p.accepte_par || "")}` : p.refuse_at ? `<span class="chip dn">Refusé</span>` : "En attente"}</dd>` : ""}</dl>`
+        ${K === "devis" ? `<dt>Réponse</dt><dd>${p.accepte_at ? `<span class="chip ok">Accepté</span> par ${esc(p.accepte_par || "")}${sigOf(id) ? " · signé électroniquement" : ""}` : p.refuse_at ? `<span class="chip dn">Refusé</span>` : "En attente"}</dd>` : ""}</dl>`
     : `<p class="mut" style="margin:0;padding:16px 18px">Pas encore envoyé en ligne. « ${K === "devis" ? "Envoyer au client" : "Envoyer au client"} » crée un lien que votre client ouvre sans compte${K === "devis" ? " pour accepter ou refuser le devis" : ""}.</p>`;
   const payHtml = K === "facture" && paiements.length
     ? card("Paiements reçus", paiements.map((x) => `<div class="row"><div><b>${E2(x.montant)}</b><small>${D(x.date_paiement)} · ${esc(x.mode)}</small></div><button class="lk w" data-act="payDel" data-id="${x.id}">Supprimer</button></div>`).join(""))
     : "";
   const echHtml = K === "facture" && d.statut !== "Annulée" ? echCard(d) : "";
   return page(`${esc(docNum(d, K))} ${chip(st)}`, `${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
-    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${echHtml}${payHtml}</div></div>`,
+    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) : ""}${echHtml}${payHtml}</div></div>`,
     crumbs([K === "devis" ? "Devis" : "Factures", k.route], [docNum(d, K)]));
 }
 
 /* ---------- Éditeur (devis / facture) : catégories > lignes (+ description) ---------- */
 function ligneRow(l = {}) {
   const tva = l.taux_tva ?? (Number(db.ent.taux_tva_defaut) || 20);
-  return `<tr class="lr"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="Désignation de la prestation"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea></td>
+  return `<tr class="lr" data-tp="${l._tp ?? ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="Désignation de la prestation"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea></td>
     <td style="width:78px"><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}"></td>
     <td style="width:86px"><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}"></td>
     <td style="width:104px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
@@ -177,6 +179,29 @@ function readLignes(root) {
   });
   return out;
 }
+// Ajoute un ouvrage de la bibliothèque dans l'éditeur (dans la catégorie du même corps d'état)
+function ovInsertLine(m, o) {
+  const isEmpty = (tr) => !$('[data-f="des"]', tr).value.trim() && !parseNum($('[data-f="pu"]', tr).value);
+  const secs = $$(".cat", m);
+  let sec = secs.find((x) => $('[data-f="cat"]', x).value.trim().toLowerCase() === String(o.corps_etat).toLowerCase());
+  if (!sec) {
+    const last = secs[secs.length - 1];
+    if (last && !$('[data-f="cat"]', last).value.trim() && $$(".lr", last).length === 1 && isEmpty($(".lr", last))) { sec = last; $('[data-f="cat"]', sec).value = o.corps_etat; }
+    else { $("#cats", m).insertAdjacentHTML("beforeend", catBlock({ cat: o.corps_etat, lignes: [{}] })); sec = $$(".cat", m).pop(); }
+  }
+  const lb = $(".lb", sec);
+  let tr = $$(".lr", lb).pop();
+  if (!tr || !isEmpty(tr)) { lb.insertAdjacentHTML("beforeend", ligneRow({})); tr = $$(".lr", lb).pop(); }
+  $('[data-f="des"]', tr).value = o.designation;
+  $('[data-f="qte"]', tr).value = "1";
+  $('[data-f="uni"]', tr).value = o.unite;
+  $('[data-f="pu"]', tr).value = String(o.prix_ht).replace(".", ",");
+  const sel = $('[data-f="tva"]', tr), t = String(Number(o.taux_tva));
+  if (![...sel.options].some((x) => x.value === t)) sel.insertAdjacentHTML("beforeend", `<option value="${t}">${t.replace(".", ",")} %</option>`);
+  sel.value = t;
+  tr.dataset.tp = o.temps_pose_h || "";
+  recalcLignes(m);
+}
 function recalcLignes(root) {
   const ls = readLignes(root);
   let i = 0;
@@ -186,8 +211,9 @@ function recalcLignes(root) {
     $('[data-f="sub"]', sec).textContent = "Sous-total " + E2(s);
   });
   const by = totauxParTaux(ls.filter((l) => l.designation || l.prix_unitaire_ht));
+  const tp = sum($$(".lr", root), (tr) => (Number(tr.dataset.tp) || 0) * parseNum($('[data-f="qte"]', tr).value));
   const ht = sum(Object.values(by), (x) => x.ht), tva = sum(Object.values(by), (x) => x.tva);
-  $("#totbox", root).innerHTML = `<div><span>Total HT</span><span class="num">${E2(ht)}</span></div>${Object.keys(by).sort((a, b) => b - a).map((t) => `<div><span>TVA ${String(t).replace(".", ",")} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}<div class="ttc"><span>Total TTC</span><span class="num">${E2(ht + tva)}</span></div>`;
+  $("#totbox", root).innerHTML = `<div><span>Total HT</span><span class="num">${E2(ht)}</span></div>${Object.keys(by).sort((a, b) => b - a).map((t) => `<div><span>TVA ${String(t).replace(".", ",")} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}<div class="ttc"><span>Total TTC</span><span class="num">${E2(ht + tva)}</span></div>${tp > 0 ? `<div title="Information interne, non imprimée sur le document"><span>Temps de pose estimé</span><span class="num">${fmtNum(tp, 1)} h</span></div>` : ""}`;
 }
 // Les colonnes categorie / description sont écrites après l'enregistrement (par position)
 async function saveCats(K, id, ls) {
@@ -216,7 +242,7 @@ async function docForm(K, d, opts = {}) {
     ${fld({ k: "date", l: K === "devis" ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
     ${K === "devis" ? fld({ k: "validite_jours", l: "Validité (jours)", t: "number", v: d?.validite_jours || 30 }) : fld({ k: "echeance", l: "Échéance de paiement", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}
     <div class="full"><div id="cats">${groupCats(lignes).map(catBlock).join("")}</div>
-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addc">+ Ajouter une catégorie</button><div class="totbox" id="totbox"></div></div></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap"><span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addc">+ Ajouter une catégorie</button><button type="button" class="btn o sm" id="addov">Ajouter depuis la bibliothèque</button></span><div class="totbox" id="totbox"></div></div></div>
     ${fld({ k: "notes", l: "Remarques (apparaissent sur le document)", t: "textarea", v: d?.notes || "", r: 0, cls: "full" })}
   </div>`;
   modal(d ? `Modifier ${esc(docNum(d, K))}` : `Nouveau ${k.label.toLowerCase()}`, body, {
@@ -226,6 +252,7 @@ async function docForm(K, d, opts = {}) {
       m.addEventListener("input", (e) => { if (e.target.closest(".cat")) recalcLignes(m); });
       m.addEventListener("click", (e) => {
         const t = e.target;
+        if (t.closest("#addov")) return ovPicker((o) => ovInsertLine(m, o));
         if (t.closest("#addc")) { $("#cats", m).insertAdjacentHTML("beforeend", catBlock({ cat: "", lignes: [{}] })); $$('[data-f="cat"]', m).pop().focus(); }
         const al = t.closest("[data-addl]");
         if (al) { const lb = $(".lb", al.closest(".cat")); lb.insertAdjacentHTML("beforeend", ligneRow({ taux_tva: Number($('[data-f="tva"]', lb.lastElementChild)?.value) || undefined })); $$('[data-f="des"]', lb).pop().focus(); }

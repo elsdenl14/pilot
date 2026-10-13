@@ -19,3 +19,12 @@ label{display:block;margin:0 0 10px;font-size:13.5px;color:var(--mut)}
 .badge.ok{color:var(--ok);border-color:var(--ok)}.badge.dn{color:var(--dn);border-color:var(--dn)}
 .er{color:var(--dn);min-height:1.2em;margin:6px 0 0}
 dl{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0}dt{color:var(--mut)}dd{margin:0;word-break:break-all}
+
+.sigbox{border:1px dashed var(--mut);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:var(--panel)}
+.sigh{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;color:var(--mut);margin-bottom:6px}
+.lk{background:none;border:0;color:var(--acc);font:inherit;font-weight:600;cursor:pointer;padding:0}
+#sig{width:100%;height:auto;aspect-ratio:3/1;touch-action:none;background:#fff;border-radius:6px;border:1px solid var(--line);cursor:crosshair;display:block}
+.sigtip{font-size:12.5px;margin:6px 0 0}
+label.chk{display:flex;gap:10px;align-items:flex-start;color:var(--tx);font-size:14px}
+label.chk input{width:auto;margin-top:3px}
+.badge.ac{color:var(--acc);border-color:var(--acc)}

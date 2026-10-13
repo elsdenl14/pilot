@@ -131,6 +131,7 @@ function priorites() {
   else if (prev < 0) add("i", 250, "Trésorerie tendue à 30 jours", `${E(entrees)} attendus, ${E(sorties)} à payer d'ici le ${D(horizon)}`, prev, { label: "Voir les paiements", act: "go", id: "paiements" }, "paiements");
 
   const rank = { u: 0, i: 1, s: 2 };
+  if (typeof cxPriorite === "function") for (const p of cxPriorite()) add(p.lv, p.score, p.titre, p.detail, null, { label: "Ouvrir", act: "go", id: "compta?tab=banque" }, "compta?tab=banque");
   return out.sort((a, b) => rank[a.lv] - rank[b.lv] || b.score - a.score);
 }
 
@@ -307,7 +308,7 @@ function clientDetail(id) {
       ${card("Factures", docTable("factures", fact))}
     </div><div>
       ${dcCard("client", id)}
-      ${card("Coordonnées", `<dl class="kv"><dt>Email</dt><dd>${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : "-"}</dd><dt>Téléphone</dt><dd>${esc(c.telephone || "-")}</dd><dt>Adresse</dt><dd>${esc(c.adresse || "-")}</dd><dt>Ville</dt><dd>${esc(c.ville || "-")}</dd><dt>Notes</dt><dd>${esc(c.notes || "-").replace(/\n/g, "<br>")}</dd></dl>`)}
+      ${card("Coordonnées", `<dl class="kv"><dt>Email</dt><dd>${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : "-"}</dd><dt>Téléphone</dt><dd>${esc(c.telephone || "-")}</dd><dt>Adresse</dt><dd>${esc(c.adresse || "-")}</dd><dt>Ville</dt><dd>${esc(c.ville || "-")}</dd>${db.cx[id]?.siret ? `<dt>SIRET</dt><dd>${esc(db.cx[id].siret)}</dd>` : ""}<dt>Notes</dt><dd>${esc(c.notes || "-").replace(/\n/g, "<br>")}</dd></dl>`)}
       ${card("Chantiers", chs.length ? chs.map((x) => `<div class="row lnk" data-go="chantiers/${x.id}" style="cursor:pointer"><div><b>${esc(x.nom)}</b><small>${esc(x.ville || "")}</small></div>${chip(x.statut)}</div>`).join("") : `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Aucun chantier.</p>`, btn("Ajouter", "chantierNew", "", "client:" + id, "o sm w"))}
     </div></div>`,
     crumbs(["Clients", "clients"], [c.nom]));
@@ -320,6 +321,7 @@ function clientForm(c) {
     ${fld({ k: "email", l: "Email", t: "email", v: c?.email, r: 0, cls: "full" })}
     ${fld({ k: "adresse", l: "Adresse", v: c?.adresse, r: 0, cls: "full" })}
     ${fld({ k: "ville", l: "Code postal et ville", v: c?.ville, r: 0, cls: "full" })}
+    ${db.v7 ? `${fld({ k: "siret", l: "SIRET (entreprises)", v: db.cx[c?.id]?.siret, r: 0, hint: "Utile pour la facture électronique." })}${fld({ k: "tva_intracom", l: "N° de TVA intracommunautaire", v: db.cx[c?.id]?.tva_intracom, r: 0 })}` : ""}
     ${fld({ k: "notes", l: "Notes", t: "textarea", v: c?.notes, r: 0, cls: "full" })}
   </div>`;
   modal(c ? "Modifier le client" : "Nouveau client", body, {
@@ -328,6 +330,7 @@ function clientForm(c) {
       let id = c?.id;
       if (c) await q(sb.from("clients").update(row).eq("id", c.id));
       else id = (await q(sb.from("clients").insert(row).select("id").single())).id;
+      if (db.v7) await q(sb.from("clients").update({ siret: String(v.siret || "").replace(/\s/g, "") || null, tva_intracom: v.tva_intracom?.trim() || null }).eq("id", id));
       api.close();
       toast(c ? "Client modifié." : "Client créé.", "ok");
       await refresh();

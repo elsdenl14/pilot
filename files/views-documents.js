@@ -17,9 +17,9 @@ function dcAll() {
     out.push({ ...o, client_id: cid, client_nom: cid ? clientOf(cid)?.nom || "" : "", chantier_nom: ch?.nom || "" });
   };
   for (const d of db.devis)
-    push({ key: "devis:" + d.id, cat: "Devis", nom: d.numero || "Devis", detail: `${d.statut} · ${E(d.montant_ttc)} TTC`, date: d.date_devis, client_id: d.client_id, chantier_id: d.chantier_id, src: "devis", go: `devis/${d.id}` });
+    push({ key: "devis:" + d.id, cat: "Devis", nom: d.numero || "Devis", detail: `${d.statut} · ${E(d.montant_ttc)} TTC${sigOf(d.id) ? " · signé" : ""}`, date: d.date_devis, client_id: d.client_id, chantier_id: d.chantier_id, src: "devis", go: `devis/${d.id}` });
   for (const f of db.factures)
-    push({ key: "facture:" + f.id, cat: "Factures", nom: f.numero || "Facture", detail: `${f.statut_affiche || f.statut} · ${E(f.montant_ttc)} TTC`, date: f.date_emission || String(f.created_at || "").slice(0, 10), client_id: f.client_id, chantier_id: f.chantier_id, src: "facture", go: `factures/${f.id}` });
+    push({ key: "facture:" + f.id, cat: "Factures", nom: f.numero || "Facture", detail: `${f.statut_affiche || f.statut} · ${E(f.montant_ttc)} TTC${efOf(f.id) ? " · Factur-X " + efOf(f.id).statut.toLowerCase() : ""}`, date: f.date_emission || String(f.created_at || "").slice(0, 10), client_id: f.client_id, chantier_id: f.chantier_id, src: "facture", go: `factures/${f.id}` });
   for (const x of db.depenses.filter((d) => d.justificatif))
     push({ key: "dep:" + x.id, cat: "Factures fournisseurs", nom: `${x.fournisseur}${x.reference ? " · " + x.reference : ""}`, detail: `${x.statut} · ${E(x.montant_ttc)} TTC`, date: x.date_depense, chantier_id: x.chantier_id, src: "dep", path: x.justificatif, edit: `depenses/${x.id}` });
   for (const x of db.docsCompta || [])
@@ -103,7 +103,7 @@ V.documents = (r) => {
   const mine = (db.documents || []).length;
   return {
     html: page("Documents", "Tous les documents au même endroit, rangés par client et par chantier.",
-      btn("Ajouter des documents", "dcNew", "", s.chantier ? "chantier:" + s.chantier : s.client ? "client:" + s.client : "", "w"),
+      btn("Scanner un document", "dcScan", "", s.chantier ? "chantier:" + s.chantier : s.client ? "client:" + s.client : "", "o w") + btn("Ajouter des documents", "dcNew", "", s.chantier ? "chantier:" + s.chantier : s.client ? "client:" + s.client : "", "w"),
       (db.v6 ? "" : card("", setupV6(), "", "mb")) + strip([
         ["Documents", scoped.length, `${mine} fichier${mine > 1 ? "s" : ""} déposé${mine > 1 ? "s" : ""}`],
         ["Devis et factures", count("Devis") + count("Factures"), "générés dans Pilot"],

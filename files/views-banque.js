@@ -431,7 +431,7 @@ function bkImport() {
   let parsed = null, plan = null;
   const accs = db.comptes;
   const cur = bkSt().compte !== "all" && bkAcc(bkSt().compte) ? bkSt().compte : accs[0]?.id || "__new";
-  const body = `<p class="mut" style="margin:0 0 12px">Exportez le relevé de votre compte depuis l'espace de votre banque (format <b>CSV</b> ou <b>OFX</b>), puis déposez-le ici. Pilot ne se connecte pas à votre banque : il lit le fichier, ne garde que les opérations et ne reprend jamais deux fois la même.</p>
+  const body = `<p class="mut" style="margin:0 0 12px">Exportez le relevé de votre compte depuis l'espace de votre banque (format <b>CSV</b> ou <b>OFX</b>), puis déposez-le ici. Pilot lit le fichier, ne garde que les opérations et ne reprend jamais deux fois la même.</p>
     <div class="frm">
     ${fld({ k: "compte", l: "Compte bancaire", t: "select", o: [...accs.map((a) => ({ v: a.id, l: a.nom })), { v: "__new", l: "+ Nouveau compte" }], v: cur })}
     <span></span>
@@ -559,7 +559,7 @@ function banqueTab(t) {
   if (!db.v6) return page("Comptabilité", sub, "", t + card("", setupV6b()));
   if (!db.comptes.length)
     return page("Comptabilité", sub, btn("Importer un relevé", "bkImport", "", "", "w"),
-      t + card("Banque", `<div class="empty" style="padding:34px 20px"><h2>Aucun compte bancaire</h2><p style="max-width:560px;margin:6px auto 16px">Importez un relevé (CSV ou OFX, exportable depuis l'espace de votre banque). Pilot affiche le solde, reconnaît les virements de vos clients et rattache chacun à la bonne facture en un clic.</p>${btn("Importer un relevé", "bkImport", "", "", "w")}<p class="mut" style="font-size:13px;margin:16px auto 0;max-width:560px">Pilot ne se connecte pas directement à votre banque : vous gardez la main sur ce qui est importé.</p></div>`));
+      t + (typeof bkConnectCard === "function" ? bkConnectCard() : "") + card("Banque", `<div class="empty" style="padding:34px 20px"><h2>Aucun compte bancaire</h2><p style="max-width:560px;margin:6px auto 16px">Importez un relevé (CSV ou OFX, exportable depuis l'espace de votre banque). Pilot affiche le solde, reconnaît les virements de vos clients et rattache chacun à la bonne facture en un clic.</p>${btn("Importer un relevé", "bkImport", "", "", "w")}<p class="mut" style="font-size:13px;margin:16px auto 0;max-width:560px">Vous pouvez aussi relier votre banque ci-dessus (lecture seule) : vous gardez la main sur ce qui est rapproché.</p></div>`));
   if (st.compte !== "all" && !bkAcc(st.compte)) st.compte = "all";
   const accs = st.compte === "all" ? db.comptes : [bkAcc(st.compte)];
   const solde = sum(accs, bkSolde);
@@ -577,7 +577,7 @@ function banqueTab(t) {
   const sure = pend.filter((x) => sg.get(x.id)?.lv === "c");
   const accSel = db.comptes.length > 1 ? `<div class="seg"><button data-act="bkAccSel" data-arg="all" aria-pressed="${st.compte === "all"}">Tous les comptes</button>${db.comptes.map((a) => `<button data-act="bkAccSel" data-arg="${a.id}" aria-pressed="${st.compte === a.id}">${esc(a.nom)}</button>`).join("")}</div>` : "";
   const ecart = r2(solde - tresorerie());
-  const accRows = accs.map((a) => `<div class="row"><div><b>${esc(a.nom)}</b><small>${a.iban ? esc(bkMask(a.iban)) + " · " : ""}${bkTxOf(a.id).length} opérations importées${Number(a.solde_initial) === 0 ? " · solde à recaler" : ""}</small></div>
+  const accRows = accs.map((a) => `<div class="row"><div><b>${esc(a.nom)}</b><small>${a.iban ? esc(bkMask(a.iban)) + " · " : ""}${bkTxOf(a.id).length} opérations importées${a.connexion_id ? " · synchronisé" : ""}${Number(a.solde_initial) === 0 ? " · solde à recaler" : ""}</small></div>
       <div style="display:flex;align-items:center;gap:14px"><b class="num ${bkSolde(a) < 0 ? "dn" : ""}" style="font-size:16px">${E2(bkSolde(a))}</b><button class="lk w" data-act="bkBalance" data-id="${a.id}">Recaler</button><button class="lk w" data-act="bkAccDel" data-id="${a.id}">Supprimer</button></div></div>`).join("");
   const flow = `<div class="seg">${[["all", "Toutes"], ["in", "Entrées"], ["out", "Sorties"]].map(([k, l]) => `<button data-act="bkFlow" data-arg="${k}" aria-pressed="${st.flow === k}">${l}</button>`).join("")}</div>`;
   const rows = list.map((x) => {
@@ -603,7 +603,7 @@ function banqueTab(t) {
       ["Reconnues avec certitude", String(sure.length), sure.length ? "rapprochables en un clic" : "aucune pour le moment"],
       ["Trésorerie estimée Pilot", E2(tresorerie()), Math.abs(ecart) < 0.01 ? "identique à la banque" : `écart avec la banque : ${ecart > 0 ? "+" : ""}${E2(ecart)}`],
     ]) +
-    card("Banque", accRows, "") +
+    (typeof bkConnectCard === "function" ? bkConnectCard() : "") + card("Banque", accRows, "") +
     card(`Transactions à rapprocher <span class="mut" style="font-weight:400">· ${total}</span>`,
       tbl(["Date", "Opération", "Suggestion", { h: "Montant", r: 1 }, ""], rows, pend.length ? "Aucune opération dans ce filtre." : "Tout est rapproché. Importez un nouveau relevé pour continuer.") + more,
       `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${sure.length ? btn(`Rapprocher les ${sure.length} certaines`, "bkMatchAll", "", "", "sm w") : ""}${flow}</div>`) +
