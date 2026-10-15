@@ -27,6 +27,7 @@ const emptyDb = () => ({
   fournisseurs: [], budgets: [], achats: [], v5: false,
   documents: [], comptes: [], bankTx: [], v6: false, bkSug: null,
   efact: [], sigs: [], connexions: [], cx: {}, nbOuvrages: 0, v7: false,
+  fd: {}, v8: false,
 });
 let db = emptyDb();
 
@@ -105,6 +106,8 @@ async function load() {
     db.cx = Object.fromEntries(cxr.map((c) => [c.id, c]));
     db.nbOuvrages = oc.count || 0; db.v7 = true; db.v7err = "";
   } catch (e) { db.efact = []; db.sigs = []; db.connexions = []; db.cx = {}; db.nbOuvrages = 0; db.v7 = false; db.v7err = e?.message || String(e); }
+  // v8 : facturation BTP (acomptes, situations, avoirs…), facultatif tant que migration_v8.sql n'est pas lancée
+  try { await loadV8(); db.v8 = true; db.v8err = ""; } catch (e) { db.fd = {}; db.v8 = false; db.v8err = e?.message || String(e); }
 }
 const setupV7 = (what = "cette fonction") =>
   `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Pour activer ${what}, exécutez <b>migration_v7.sql</b> dans Supabase (SQL Editor), puis rechargez la page.${db.v7err ? `<br><br>Erreur renvoyée par Supabase : <code>${esc(db.v7err)}</code>` : ""}</p>`;
@@ -113,10 +116,10 @@ const setupV7 = (what = "cette fonction") =>
 const byId = (arr, id) => arr.find((x) => x.id === id);
 const clientOf = (id) => byId(db.clients, id);
 const emises = () => db.factures.filter((f) => f.statut !== "Brouillon" && f.statut !== "Annulée");
-const ouvertes = () => db.factures.filter((f) => f.statut === "Envoyée" || f.statut === "Partiellement payée");
+const ouvertes = () => db.factures.filter((f) => (f.statut === "Envoyée" || f.statut === "Partiellement payée") && f.reste > 0.005);
 const enRetard = () => ouvertes().filter((f) => f.statut_affiche === "En retard");
 const devisFacture = (id) => db.factures.find((f) => f.devis_id === id && f.statut !== "Annulée");
-const aFacturer = () => db.devis.filter((d) => d.statut === "Accepté" && !devisFacture(d.id));
+const aFacturer = () => db.devis.filter((d) => d.statut === "Accepté" && (typeof fxResteDevis === "function" && db.v8 ? fxResteDevis(d) > 1 : !devisFacture(d.id)));
 const depensesAPayer = () => db.depenses.filter((d) => d.statut === "À payer");
 const partageOf = (id) => db.partages.find((p) => p.doc_id === id);
 const encaisseTotal = () => sum(db.paiements, (p) => p.montant);
@@ -225,7 +228,7 @@ const CHIP = {
   "En cours": "ok", Accepté: "ok", Payée: "ok", Terminé: "ok",
   "À surveiller": "wn", Envoyé: "wn", Envoyée: "wn", "Partiellement payée": "wn", "À payer": "wn",
   "À facturer": "ac", "En retard": "dn", Refusé: "dn",
-  "En attente": "wn", Commandée: "ac", Livrée: "ok", Facturée: "n", Annulée: "n",
+  Avoir: "n", Soldée: "ok", "En attente": "wn", Commandée: "ac", Livrée: "ok", Facturée: "n", Annulée: "n",
 };
 const trAttrs = (r) => {
   const cls = [r.go || r.act ? "lnk" : "", r.cls || ""].filter(Boolean).join(" ");

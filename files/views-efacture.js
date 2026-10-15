@@ -30,13 +30,17 @@ async function efData(fid) {
   const lignes = await lignesOf("facture", fid);
   const c = { ...(clientOf(f.client_id) || {}), ...(db.cx[f.client_id] || {}) };
   const ch = f.chantier_id ? byId(db.chantiers, f.chantier_id) : null;
-  return { f, c, ch, ent: db.ent, lignes };
+  const meta = (typeof fdOf === "function" && fdOf(fid)) || {};
+  const refs = [];
+  if (meta.nature === "Avoir" && meta.parent_id) { const p = byId(db.factures, meta.parent_id); if (p) refs.push({ numero: p.numero, date: p.date_emission }); }
+  else [...new Set(lignes.filter((l) => l.nature === "deduction" && l.ref_facture_id).map((l) => l.ref_facture_id))].forEach((id) => { const p = byId(db.factures, id); if (p?.numero) refs.push({ numero: p.numero, date: p.date_emission }); });
+  return { f, c, ch, ent: db.ent, lignes, meta, refs };
 }
-function efTotals(lignes) {
+function efTotals(lignes, sign = 1) {
   const by = {};
   let ht = 0;
   lignes.forEach((l) => {
-    const lt = r2(Number(l.quantite) * Number(l.prix_unitaire_ht)), k = String(Number(l.taux_tva));
+    const lt = r2(sign * Number(l.quantite) * Number(l.prix_unitaire_ht)), k = String(Number(l.taux_tva));
     by[k] ||= { basis: 0, tax: 0 };
     by[k].basis = r2(by[k].basis + lt);
     ht = r2(ht + lt);
@@ -46,7 +50,7 @@ function efTotals(lignes) {
   return { by, ht, tva, ttc: r2(ht + tva) };
 }
 async function efChecks(fid) {
-  const { f, c, ent, lignes } = await efData(fid);
+  const { f, c, ent, lignes, meta, refs } = await efData(fid);
   const out = [];
   const add = (lv, t) => out.push({ lv, t });
   const siret = String(ent.siret || "").replace(/\s/g, "");
@@ -72,38 +76,57 @@ async function efChecks(fid) {
   if (Object.keys(t.by).some((k) => ![0, 2.1, 5.5, 10, 20].includes(Number(k)))) add("warn", "Un taux de TVA inhabituel est utilisé sur une ligne.");
   if (Object.keys(t.by).some((k) => Number(k) === 0)) add("warn", "Une ligne est à 0 % de TVA : elle sera déclarée « exonérée ». Si c'est une autoliquidation (sous-traitance), faites valider ce point par votre plateforme.");
   if (!f.echeance) add("warn", "Date d'échéance absente.");
+  if (meta.nature === "Avoir" && !refs.length) add("err", "L'avoir doit se rapporter à une facture émise (numéro de la facture d'origine).");
+  if (meta.nature === "Avoir") add("ok", "Avoir : document de type 381, avec référence à la facture d'origine.");
+  if (meta.nature === "Acompte") add("ok", "Facture d'acompte : document de type 386.");
+  if (lignes.some((l) => l.nature === "deduction")) add("warn", "Cette facture déduit des factures précédentes par des lignes négatives. Certaines plateformes préfèrent le champ « montant déjà payé » : faites valider ce point par la vôtre.");
+  const fcc = f.fx;
+  if (fcc && (fcc.retenue || fcc.prime || fcc.prorata || fcc.escompte)) add("warn", "Retenue de garantie, prime, compte prorata ou escompte : ils figurent en note dans le fichier, et le montant à payer du fichier reste le TTC. Faites valider ce point par votre plateforme.");
   if (!ent.categorie_operation) add("warn", "Catégorie d'opération non choisie (prestation de services par défaut).");
   return out;
 }
 
 /* ---------- XML Factur-X (CII, profil EN 16931) ---------- */
-function efXml({ f, c, ch, ent, lignes }) {
-  const t = efTotals(lignes);
+function efXml({ f, c, ch, ent, lignes, meta = {}, refs = [] }) {
+  const nat = meta.nature || "Facture", credit = nat === "Avoir", sg = credit ? -1 : 1;
+  const typeCode = credit ? 381 : nat === "Acompte" ? 386 : 380;
+  const t = efTotals(lignes, sg);
   const sa = adrParts(ent.adresse, ""), ba = adrParts(c.adresse, c.ville);
   const sSiren = siren(ent.siret), bSiren = siren(c.siret);
   const dl = Number(ent.delai_paiement_jours) || 30;
   const addr = (a) => `<ram:PostalTradeAddress>${a.cp ? `<ram:PostcodeCode>${xe(a.cp)}</ram:PostcodeCode>` : ""}${a.line ? `<ram:LineOne>${xe(a.line)}</ram:LineOne>` : ""}${a.city ? `<ram:CityName>${xe(a.city)}</ram:CityName>` : ""}<ram:CountryID>FR</ram:CountryID></ram:PostalTradeAddress>`;
   const cat = (rate) => (Number(rate) === 0 ? "E" : "S");
   const lineXml = lignes.map((l, i) => {
-    const lt = r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
+    // EN 16931 : le prix net d'une ligne n'est jamais négatif ; le signe passe par la quantité. Dans un avoir (381), les montants sont positifs.
+    const pu0 = Number(l.prix_unitaire_ht), q0 = sg * Number(l.quantite), qty = pu0 < 0 ? -q0 : q0, pu = Math.abs(pu0);
+    const lt = r2(qty * pu);
     return `<ram:IncludedSupplyChainTradeLineItem><ram:AssociatedDocumentLineDocument><ram:LineID>${i + 1}</ram:LineID></ram:AssociatedDocumentLineDocument>
 <ram:SpecifiedTradeProduct><ram:Name>${xe(String(l.designation || "Prestation").slice(0, 200))}</ram:Name>${l.description ? `<ram:Description>${xe(l.description)}</ram:Description>` : ""}</ram:SpecifiedTradeProduct>
-<ram:SpecifiedLineTradeAgreement><ram:NetPriceProductTradePrice><ram:ChargeAmount>${nq(l.prix_unitaire_ht)}</ram:ChargeAmount></ram:NetPriceProductTradePrice></ram:SpecifiedLineTradeAgreement>
-<ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode="${EF_UNITS[l.unite] || "C62"}">${+Number(l.quantite).toFixed(4)}</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>
+<ram:SpecifiedLineTradeAgreement><ram:NetPriceProductTradePrice><ram:ChargeAmount>${nq(pu)}</ram:ChargeAmount></ram:NetPriceProductTradePrice></ram:SpecifiedLineTradeAgreement>
+<ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode="${EF_UNITS[l.unite] || "C62"}">${+Number(qty).toFixed(4)}</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>
 <ram:SpecifiedLineTradeSettlement><ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode><ram:CategoryCode>${cat(l.taux_tva)}</ram:CategoryCode><ram:RateApplicablePercent>${n2(l.taux_tva)}</ram:RateApplicablePercent></ram:ApplicableTradeTax>
 <ram:SpecifiedTradeSettlementLineMonetarySummation><ram:LineTotalAmount>${n2(lt)}</ram:LineTotalAmount></ram:SpecifiedTradeSettlementLineMonetarySummation></ram:SpecifiedLineTradeSettlement></ram:IncludedSupplyChainTradeLineItem>`;
   }).join("\n");
   const taxXml = Object.keys(t.by).sort((a, b) => b - a).map((k) => `<ram:ApplicableTradeTax><ram:CalculatedAmount>${n2(t.by[k].tax)}</ram:CalculatedAmount><ram:TypeCode>VAT</ram:TypeCode>${Number(k) === 0 ? `<ram:ExemptionReason>TVA non applicable</ram:ExemptionReason>` : ""}<ram:BasisAmount>${n2(t.by[k].basis)}</ram:BasisAmount><ram:CategoryCode>${cat(k)}</ram:CategoryCode><ram:RateApplicablePercent>${n2(k)}</ram:RateApplicablePercent></ram:ApplicableTradeTax>`).join("\n");
+  const fc = f.fx || {};
+  const nl = [];
+  if (nat !== "Facture") nl.push([null, (typeof fxLabel === "function" ? fxLabel(f) : nat) + (credit && refs[0] ? ` sur la facture ${refs[0].numero}` : "")]);
+  if (credit && meta.motif) nl.push([null, "Motif : " + meta.motif]);
+  if (fc.retenue) nl.push([null, `Retenue de garantie ${nq(fc.retenuePct)} % : ${n2(fc.retenue)} EUR, libérable un an après la réception des travaux.`]);
+  if (fc.prime) nl.push([null, `Prime ${fc.primeLib || "énergétique"} : ${n2(fc.prime)} EUR déduits du net à payer par le client.`]);
+  if (fc.prorata) nl.push([null, `Compte prorata : ${n2(fc.prorata)} EUR retenus.`]);
+  if (fc.retenue || fc.prime || fc.prorata) nl.push([null, `Net à payer par le client : ${n2(fc.net - (f.avoirs || 0))} EUR.`]);
   const notes = [
+    ...nl,
     ["PMD", `En cas de retard de paiement, des pénalités égales à 3 fois le taux d'intérêt légal sont exigibles (art. L441-10 du Code de commerce).`],
     ["PMT", `Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 EUR (art. D441-5 du Code de commerce).`],
-    ["AAB", `Pas d'escompte pour paiement anticipé.`],
-  ].map(([code, txt]) => `<ram:IncludedNote><ram:Content>${xe(txt)}</ram:Content><ram:SubjectCode>${code}</ram:SubjectCode></ram:IncludedNote>`).join("\n");
+    ["AAB", fc.escompte ? `Escompte de ${nq(fc.escomptePct)} % pour règlement avant le ${D(fc.limite)}.` : `Pas d'escompte pour paiement anticipé.`],
+  ].map(([code, txt]) => `<ram:IncludedNote><ram:Content>${xe(txt)}</ram:Content>${code ? `<ram:SubjectCode>${code}</ram:SubjectCode>` : ""}</ram:IncludedNote>`).join("\n");
   const catOp = ent.categorie_operation ? `<ram:IncludedNote><ram:Content>${xe("Catégorie d'opération : " + ent.categorie_operation + (ent.tva_sur_debits ? " - TVA sur les débits" : ""))}</ram:Content></ram:IncludedNote>` : "";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
 <rsm:ExchangedDocumentContext><ram:GuidelineSpecifiedDocumentContextParameter><ram:ID>urn:cen.eu:en16931:2017</ram:ID></ram:GuidelineSpecifiedDocumentContextParameter></rsm:ExchangedDocumentContext>
-<rsm:ExchangedDocument><ram:ID>${xe(f.numero)}</ram:ID><ram:TypeCode>380</ram:TypeCode><ram:IssueDateTime><udt:DateTimeString format="102">${d102(f.date_emission)}</udt:DateTimeString></ram:IssueDateTime>
+<rsm:ExchangedDocument><ram:ID>${xe(f.numero)}</ram:ID><ram:TypeCode>${typeCode}</ram:TypeCode><ram:IssueDateTime><udt:DateTimeString format="102">${d102(f.date_emission)}</udt:DateTimeString></ram:IssueDateTime>
 ${notes}
 ${catOp}</rsm:ExchangedDocument>
 <rsm:SupplyChainTradeTransaction>
@@ -119,6 +142,7 @@ ${ent.iban ? `<ram:SpecifiedTradeSettlementPaymentMeans><ram:TypeCode>58</ram:Ty
 ${taxXml}
 <ram:SpecifiedTradePaymentTerms><ram:Description>${xe(`Paiement à ${dl} jours`)}</ram:Description>${f.echeance ? `<ram:DueDateDateTime><udt:DateTimeString format="102">${d102(f.echeance)}</udt:DateTimeString></ram:DueDateDateTime>` : ""}</ram:SpecifiedTradePaymentTerms>
 <ram:SpecifiedTradeSettlementHeaderMonetarySummation><ram:LineTotalAmount>${n2(t.ht)}</ram:LineTotalAmount><ram:TaxBasisTotalAmount>${n2(t.ht)}</ram:TaxBasisTotalAmount><ram:TaxTotalAmount currencyID="EUR">${n2(t.tva)}</ram:TaxTotalAmount><ram:GrandTotalAmount>${n2(t.ttc)}</ram:GrandTotalAmount><ram:DuePayableAmount>${n2(t.ttc)}</ram:DuePayableAmount></ram:SpecifiedTradeSettlementHeaderMonetarySummation>
+${refs.map((r) => `<ram:InvoiceReferencedDocument><ram:IssuerAssignedID>${xe(r.numero)}</ram:IssuerAssignedID>${r.date ? `<ram:FormattedIssueDateTime><qdt:DateTimeString format="102">${d102(r.date)}</qdt:DateTimeString></ram:FormattedIssueDateTime>` : ""}</ram:InvoiceReferencedDocument>`).join("\n")}
 </ram:ApplicableHeaderTradeSettlement>
 </rsm:SupplyChainTradeTransaction>
 </rsm:CrossIndustryInvoice>`.replace(/\n{2,}/g, "\n");

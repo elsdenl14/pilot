@@ -121,7 +121,10 @@ const PilotPdf = (() => {
     newPage(true);
 
     // ---- En-tête ----
-    const title = kind === "devis" ? "DEVIS" : "FACTURE";
+    const fx = kind === "facture" ? data.fx : null, fc = fx?.calc;
+    const title = kind === "devis" ? "DEVIS" : clean((fx?.label || "Facture").toUpperCase());
+    const tw0 = bold.widthOfTextAtSize(title, 28), tsz = tw0 > 250 ? (28 * 250) / tw0 : 28;
+    const fit = (t, size, maxW, f = font) => { t = clean(t); if (f.widthOfTextAtSize(t, size) <= maxW) return t; while (t.length > 1 && f.widthOfTextAtSize(t + "…", size) > maxW) t = t.slice(0, -1); return t + "…"; };
     const rightX = W - ML;
     if (!bg) {
       let hy = y;
@@ -143,14 +146,16 @@ const PilotPdf = (() => {
       for (const l of idLines) {
         for (const ll of wrap(l, font, 8.5, 250)) { txt(ll, ML, hy - 4, { size: 8.5, color: GREY }); hy -= 11.5; }
       }
-      txt(title, rightX, y - 8, { size: 28, f: bold, color: A, right: true });
-      const mx = rightX - 196, my = y - 22, mh = 64;
+      txt(title, rightX, y - 8, { size: tsz, f: bold, color: A, right: true });
+      const meta0 = fx?.nature === "Avoir" && fx.parentNumero ? 4 : 3;
+      const mx = rightX - 196, my = y - 22, mh = 16 + meta0 * 16;
       page.drawRectangle({ x: mx, y: my - mh, width: 196, height: mh, color: ASoft });
       page.drawRectangle({ x: mx, y: my - mh, width: 3, height: mh, color: A });
       const meta = [
         ["N°", data.numero || "-"],
         ["Date d'émission", D(data.date)],
-        kind === "devis" ? ["Valable jusqu'au", D(addDays(data.date, Number(data.validite_jours) || 30))] : ["Échéance", D(data.echeance)],
+        kind === "devis" ? ["Valable jusqu'au", D(addDays(data.date, Number(data.validite_jours) || 30))] : fx?.nature === "Avoir" ? ["Date de l'avoir", D(data.date)] : ["Échéance", D(data.echeance)],
+        ...(fx?.nature === "Avoir" && fx.parentNumero ? [["Sur la facture", fx.parentNumero]] : []),
       ];
       let ry = my - 18;
       for (const [k, v] of meta) {
@@ -163,6 +168,7 @@ const PilotPdf = (() => {
       y = Math.min(hy, ry) - 16;
     } else {
       txt(`${title}  ${data.numero || ""}`, ML, y - 4, { size: 18, f: bold, color: A });
+      if (fx?.nature === "Avoir" && fx.parentNumero) { txt("Sur la facture " + fx.parentNumero, ML, y - 18, { size: 9, color: GREY }); y -= 12; }
       let ry = y - 24;
       const meta = [
         "Date : " + D(data.date),
@@ -208,12 +214,35 @@ const PilotPdf = (() => {
     const WHITE = rgb(1, 1, 1), ZEBRA = rgb(0.975, 0.978, 0.982);
     const lignes = data.lignes?.length ? data.lignes : data.ht > 0 ? [{ designation: "Prestation", quantite: 1, unite: "forfait", prix_unitaire_ht: data.ht, taux_tva: data.taux_tva ?? 20 }] : [];
     const lht = (l) => r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
-    const groups = [];
+    const byRate = {};
     for (const l of lignes) {
+      const ht = lht(l), k = String(Number(l.taux_tva));
+      byRate[k] ||= { ht: 0, tva: 0 };
+      byRate[k].ht += ht;
+      byRate[k].tva += r2((ht * Number(l.taux_tva)) / 100);
+    }
+    const dedLines = lignes.filter((l) => l.nature === "deduction");
+    const groups = [];
+    for (const l of lignes.filter((l) => l.nature !== "deduction")) {
       const cat = String(l.categorie || "").trim(), g = groups[groups.length - 1];
       if (g && g.cat === cat) g.items.push(l); else groups.push({ cat, items: [l] });
     }
     groups.forEach((g) => (g.sum = r2(sum(g.items, lht))));
+    // Situation : récapitulatif de l'avancement du marché
+    if (fx?.avancement?.length) {
+      need(60 + fx.avancement.length * 16);
+      txt(`AVANCEMENT DES TRAVAUX  -  MARCHÉ ${money(fx.marche_ht)} HT`, ML, y - 8, { size: 8, f: bold, color: A });
+      y -= 22;
+      fx.avancement.forEach((a) => {
+        need(20);
+        txt(fit(a.label, 9.5, 270), ML + 6, y - 8, { size: 9.5 });
+        txt(money(a.marche), X.pu, y - 8, { size: 9.5, right: true, color: GREY });
+        txt(`${fmtNum(a.prev, a.prev % 1 ? 1 : 0)} % > ${fmtNum(a.cum, a.cum % 1 ? 1 : 0)} %`, X.tot, y - 8, { size: 9.5, f: bold, right: true });
+        y -= 16;
+        page.drawLine({ start: { x: ML, y: y + 3 }, end: { x: W - ML, y: y + 3 }, thickness: 0.4, color: LINE });
+      });
+      y -= 10;
+    }
     // Récapitulatif : on voit d'un coup d'oeil le prix de chaque poste
     if (groups.filter((g) => g.cat).length >= 2) {
       need(40 + groups.length * 17);
@@ -248,14 +277,10 @@ const PilotPdf = (() => {
       txt("Sous-total " + money(g.sum), X.tot, y - 14, { size: 9, f: bold, color: A, right: true });
       y -= 27;
     };
-    const byRate = {};
     groups.forEach((g, gi) => {
       if (g.cat) { if (y - 80 < botM) { newPage(); header(); } band(g, gi, false); }
       g.items.forEach((l, li) => {
-        const ht = lht(l), tv = r2((ht * Number(l.taux_tva)) / 100), k = String(Number(l.taux_tva));
-        byRate[k] ||= { ht: 0, tva: 0 };
-        byRate[k].ht += ht;
-        byRate[k].tva += tv;
+        const ht = lht(l), libre = l.nature === "libre";
         const lines = wrap(l.designation, font, 9.5, designW);
         const dl = l.description ? String(l.description).split("\n").flatMap((p) => wrap(p, font, 8.5, designW)) : [];
         const rh = lines.length * 12.5 + dl.length * 11 + 11;
@@ -265,11 +290,15 @@ const PilotPdf = (() => {
         lines.forEach((ll, i) => txt(ll, designX, y - 11 - i * 12.5, { size: 9.5 }));
         dl.forEach((ll, i) => txt(ll, designX, y - 11 - lines.length * 12.5 - i * 11, { size: 8.5, color: GREY }));
         const q = Number(l.quantite);
-        txt(fmtNum(q, Number.isInteger(q) ? 0 : 2), X.qte, y - 11, { right: true });
-        txt(l.unite || "", X.unite, y - 11, { color: GREY });
-        txt(fmtNum(l.prix_unitaire_ht, 2), X.pu, y - 11, { right: true });
-        txt(fmtNum(l.taux_tva, Number(l.taux_tva) % 1 ? 1 : 0) + " %", X.tva, y - 11, { right: true, color: GREY });
-        txt(fmtNum(ht, 2), X.tot, y - 11, { right: true, f: bold });
+        if (!libre) {
+          txt(fmtNum(q, Number.isInteger(q) ? 0 : 2), X.qte, y - 11, { right: true });
+          txt(l.unite || "", X.unite, y - 11, { color: GREY });
+          txt(fmtNum(l.prix_unitaire_ht, 2), X.pu, y - 11, { right: true });
+        }
+        if (!libre || ht) {
+          txt(fmtNum(l.taux_tva, Number(l.taux_tva) % 1 ? 1 : 0) + " %", X.tva, y - 11, { right: true, color: GREY });
+          txt(fmtNum(ht, 2), X.tot, y - 11, { right: true, f: bold });
+        }
         y -= rh;
         page.drawLine({ start: { x: ML, y: y + 2 }, end: { x: W - ML, y: y + 2 }, thickness: 0.4, color: LINE });
       });
@@ -279,10 +308,24 @@ const PilotPdf = (() => {
 
     // ---- Totaux ----
     const rates = Object.keys(byRate).sort((a, b) => b - a);
-    const tot = [["Total HT", money(data.ht)], ...rates.map((k) => [`TVA ${fmtNum(k, k % 1 ? 1 : 0)} %  (base ${money(byRate[k].ht)})`, money(byRate[k].tva)])];
+    const dedHt = r2(sum(dedLines, lht));
+    const tot = [];
+    if (dedLines.length) {
+      tot.push(["Total des travaux HT", money(r2(Number(data.ht) - dedHt))]);
+      dedLines.forEach((l) => tot.push([fit("Déjà facturé : " + String(l.designation).replace(/^D[ée]duction\s*:\s*/i, "").replace(/\s*\(.*$/, ""), 8.5, 150), "- " + money(-lht(l))]));
+    }
+    tot.push([dedLines.length ? "Reste à facturer HT" : "Total HT", money(data.ht)]);
+    rates.forEach((k) => tot.push([`TVA ${fmtNum(k, k % 1 ? 1 : 0)} %  (base ${money(byRate[k].ht)})`, money(byRate[k].tva)]));
     if (!rates.length) tot.push(["TVA", money(data.tva)]);
     const paye = Number(data.paye || 0);
-    const nrows = tot.length + 2 + (kind === "facture" && paye > 0 ? 2 : 0);
+    const adj = [];
+    if (fc?.retenue) adj.push([`Retenue de garantie ${fmtNum(fc.retenuePct, 1)} %`, "- " + money(fc.retenue)]);
+    if (fc?.prime) adj.push([fit(`Prime ${fc.primeLib || "énergétique"}`, 9, 170), "- " + money(fc.prime)]);
+    if (fc?.prorata) adj.push([`Compte prorata${fc.prorataPct ? " " + fmtNum(fc.prorataPct, 1) + " %" : ""}`, "- " + money(fc.prorata)]);
+    if (fx?.avoirs) adj.push(["Avoirs déduits", "- " + money(fx.avoirs)]);
+    const showNet = kind === "facture" && fx?.nature !== "Avoir" && (adj.length > 0 || fc?.escompte > 0);
+    const netDu = showNet ? r2(fc.net - (fx.avoirs || 0)) : Number(data.ttc);
+    const nrows = tot.length + 2 + (showNet ? adj.length + 2 : 0) + (kind === "facture" && paye > 0 ? 2 : 0) + (fc?.escompte ? 1 : 0);
     need(nrows * 17 + 24);
     const tx = W - ML - 235;
     for (const [k, v] of tot) {
@@ -295,12 +338,28 @@ const PilotPdf = (() => {
     txt("TOTAL TTC", tx, y - 13, { size: 10, f: bold, color: WHITE });
     txt(money(data.ttc), W - ML - 6, y - 14, { size: 13, f: bold, color: WHITE, right: true });
     y -= 40;
+    if (showNet) {
+      for (const [k, v] of adj) {
+        txt(k, tx, y - 6, { size: 9, color: GREY });
+        txt(v, W - ML - 6, y - 6, { size: 9.5, right: true });
+        y -= 17;
+      }
+      page.drawLine({ start: { x: tx - 8, y: y + 4 }, end: { x: W - ML, y: y + 4 }, thickness: 0.6, color: LINE });
+      txt("NET À PAYER", tx, y - 10, { size: 10.5, f: bold });
+      txt(money(netDu), W - ML - 6, y - 10, { size: 12, f: bold, right: true });
+      y -= 26;
+      if (fc.escompte) {
+        txt(fit(`Si payé avant le ${D(fc.limite)} (-${fmtNum(fc.escomptePct, 1)} %)`, 8.5, 160), tx, y - 4, { size: 8.5, color: GREY });
+        txt(money(r2(netDu - fc.escompte)), W - ML - 6, y - 4, { size: 9.5, f: bold, right: true });
+        y -= 17;
+      }
+    }
     if (kind === "facture" && paye > 0) {
       txt("Déjà réglé", tx, y - 6, { size: 9.5, color: GREY });
       txt("- " + money(paye), W - ML - 6, y - 6, { size: 9.5, right: true });
       y -= 17;
       txt("Reste à payer", tx, y - 6, { size: 10.5, f: bold });
-      txt(money(Number(data.ttc) - paye), W - ML - 6, y - 6, { size: 10.5, f: bold, right: true });
+      txt(money(fx?.reste ?? Number(data.ttc) - paye), W - ML - 6, y - 6, { size: 10.5, f: bold, right: true });
       y -= 22;
     }
     y -= 8;
@@ -315,12 +374,20 @@ const PilotPdf = (() => {
       y -= 8;
     };
     if (data.notes) para("Remarques", data.notes);
-    if (kind === "facture") {
+    if (kind === "facture" && fx?.nature === "Avoir") {
+      para("Avoir", "Cet avoir vient en déduction des sommes dues sur la facture d'origine, ou fait l'objet d'un remboursement.");
+    } else if (kind === "facture") {
       const delai = ent.delai_paiement_jours ?? 30;
+      const esc2 = fc?.escompte ? `Escompte de ${fmtNum(fc.escomptePct, 1)} % pour règlement avant le ${D(fc.limite)}, soit ${money(r2(netDu - fc.escompte))} à payer.` : "Pas d'escompte pour paiement anticipé.";
       para(
         "Conditions de règlement",
-        `Paiement à réception, au plus tard le ${D(data.echeance)} (${delai} jours). Pas d'escompte pour paiement anticipé. En cas de retard : pénalités égales à 3 fois le taux d'intérêt légal et indemnité forfaitaire de recouvrement de 40 € (art. L441-10 du Code de commerce).`,
+        `Paiement à réception, au plus tard le ${D(data.echeance)} (${delai} jours). ${esc2} En cas de retard : pénalités égales à 3 fois le taux d'intérêt légal et indemnité forfaitaire de recouvrement de 40 € (art. L441-10 du Code de commerce).`,
       );
+      if (fx?.nature === "Acompte") para("Acompte", "Facture d'acompte : son montant sera déduit de la facture finale.");
+      if (fc?.retenue) para("Retenue de garantie", `Retenue de garantie de ${fmtNum(fc.retenuePct, 1)} % du montant TTC (${money(fc.retenue)}), libérable un an après la réception des travaux${fx.retenueDate ? ", soit le " + D(fx.retenueDate) : ""}, sauf réserves non levées (loi n° 71-584 du 16 juillet 1971).`);
+      else if (fc?.caution && fc.retenuePct) para("Retenue de garantie", "La retenue de garantie est remplacée par une caution bancaire.");
+      if (fc?.prime) para("Prime énergétique", `Prime ${fc.primeLib || "énergétique"} de ${money(fc.prime)} déduite du net à payer par le client : elle est perçue par l'entreprise.`);
+      if (fc?.prorata) para("Compte prorata", `Participation au compte prorata de ${money(fc.prorata)} retenue sur cette facture.`);
       if (ent.iban) para("Règlement par virement", `IBAN : ${ent.iban}${ent.bic ? "   -   BIC : " + ent.bic : ""}\nMerci de rappeler le numéro de facture ${data.numero || ""} en référence.`);
     } else {
       para("Conditions", `Devis valable ${data.validite_jours || 30} jours à compter de sa date d'émission. Les travaux débuteront après réception du devis daté et signé.`);

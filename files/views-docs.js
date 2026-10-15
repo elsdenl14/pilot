@@ -43,12 +43,12 @@ function docList(K, r) {
   if (r.arg) return docDetail(K, r.arg);
   const tabsDef = K === "devis"
     ? [["tous", "Tous"], ["Brouillon", "Brouillons"], ["Envoyé", "Envoyés"], ["Accepté", "Acceptés"], ["Refusé", "Refusés"]]
-    : [["tous", "Toutes"], ["Brouillon", "Brouillons"], ["ouv", "À encaisser"], ["En retard", "En retard"], ["Payée", "Payées"]];
+    : [["tous", "Toutes"], ["Brouillon", "Brouillons"], ["ouv", "À encaisser"], ["En retard", "En retard"], ["Payée", "Payées"], ...(db.v8 ? [["Avoir", "Avoirs"]] : [])];
   const cur = ST.tab[k.list] || "tous";
-  const list = db[k.list].filter((d) => cur === "tous" || (cur === "ouv" ? ["Envoyée", "Partiellement payée"].includes(d.statut) : docStatut(d, K) === cur));
+  const list = db[k.list].filter((d) => cur === "tous" || (cur === "ouv" ? ["Envoyée", "Partiellement payée"].includes(d.statut) && d.reste > 0.005 : docStatut(d, K) === cur));
   const total = sum(list, (d) => d.montant_ttc);
   const rows = list.map((d) => ({ go: `${k.route}/${d.id}`, t: `${d.numero || ""} ${d.client_nom} ${d.chantier_nom || ""}`,
-    c: [`<strong>${esc(docNum(d, K))}</strong>`, `${esc(d.client_nom)}${d.chantier_nom ? `<small>${esc(d.chantier_nom)}</small>` : ""}`,
+    c: [`<strong>${esc(docNum(d, K))}</strong>${K === "facture" ? fxTag(d) : ""}`, `${esc(d.client_nom)}${d.chantier_nom ? `<small>${esc(d.chantier_nom)}</small>` : ""}`,
       D(K === "devis" ? d.date_devis : d.statut === "Brouillon" ? d.date_emission : d.echeance),
       `<span class="num">${E2(d.montant_ttc)}</span>`,
       K === "facture" && d.reste > 0 && d.statut !== "Brouillon" ? `<span class="num ${d.statut_affiche === "En retard" ? "dn" : ""}">${E2(d.reste)}</span>` : K === "facture" ? "" : null,
@@ -59,7 +59,7 @@ function docList(K, r) {
   return page(K === "devis" ? "Devis" : "Factures",
     K === "devis" ? "Créer, envoyer et suivre vos propositions commerciales." : "Émettre, envoyer et suivre vos factures jusqu'au paiement.",
     btn(K === "devis" ? "Nouveau devis" : "Nouvelle facture", K === "devis" ? "devisNew" : "factureNew", "", "", "w"),
-    tabs(k.list, tabsDef, cur) + searchBar("Rechercher un numéro, un client, un chantier…", `${list.length} document${list.length > 1 ? "s" : ""} · ${E(total)} TTC`) +
+    (K === "facture" ? fxPendingCard() : "") + tabs(k.list, tabsDef, cur) + searchBar("Rechercher un numéro, un client, un chantier…", `${list.length} document${list.length > 1 ? "s" : ""} · ${E(total)} TTC`) +
       card("", tbl(cols, rows, K === "devis" ? "Aucun devis. Créez le premier avec le bouton « Nouveau devis »." : "Aucune facture. Transformez un devis accepté en facture ou créez-en une.")));
 }
 V.devis = (r) => docList("devis", r);
@@ -74,22 +74,30 @@ function docPreview(K, d, lignes) {
   const gs = lignes.length ? groupCats(lignes) : [];
   gs.forEach((g) => (g.sum = r2(sum(g.lignes, lht))));
   const recap = gs.filter((g) => g.cat).length >= 2 ? `<div class="doc-recap"><b>Récapitulatif des travaux</b>${gs.map((g, i) => `<div><span>${i + 1}. ${esc(g.cat || "Divers")}</span><span class="num">${E2(g.sum)}</span></div>`).join("")}</div>` : "";
-  const rows = gs.length
-    ? gs.map((g, gi) => (g.cat ? `<tr class="cc"><td colspan="5">${gi + 1}. ${esc(g.cat)}</td><td class="r">Sous-total ${E2(g.sum)}</td></tr>` : "") +
-      g.lignes.map((l, li) => `<tr><td class="n">${gi + 1}.${li + 1}</td><td>${esc(l.designation)}${l.description ? `<small class="ld">${esc(l.description).replace(/\n/g, "<br>")}</small>` : ""}</td><td class="r">${fmtNum(l.quantite, Number.isInteger(l.quantite) ? 0 : 2)} ${esc(l.unite || "")}</td><td class="r">${fmtNum(l.prix_unitaire_ht)}</td><td class="r">${fmtNum(l.taux_tva, l.taux_tva % 1 ? 1 : 0)} %</td><td class="r"><b>${fmtNum(lht(l))}</b></td></tr>`).join("")).join("")
+  const fd = K === "facture" ? fdOf(d.id) : null, isDed = (l) => l.nature === "deduction", isLibre = (l) => l.nature === "libre";
+  const ded = lignes.filter(isDed);
+  gs.forEach((g) => (g.lignes = g.lignes.filter((l) => !isDed(l))));
+  const gsShown = gs.filter((g) => g.lignes.length);
+  const rows = gsShown.length
+    ? gsShown.map((g, gi) => (g.cat ? `<tr class="cc"><td colspan="5">${gi + 1}. ${esc(g.cat)}</td><td class="r">Sous-total ${E2(g.sum)}</td></tr>` : "") +
+      g.lignes.map((l, li) => `<tr><td class="n">${gi + 1}.${li + 1}</td><td>${esc(l.designation)}${l.description ? `<small class="ld">${esc(l.description).replace(/\n/g, "<br>")}</small>` : ""}</td>${isLibre(l) ? `<td class="r"></td><td class="r"></td>` : `<td class="r">${fmtNum(l.quantite, Number.isInteger(l.quantite) ? 0 : 2)} ${esc(l.unite || "")}</td><td class="r">${fmtNum(l.prix_unitaire_ht)}</td>`}<td class="r">${fmtNum(l.taux_tva, l.taux_tva % 1 ? 1 : 0)} %</td><td class="r"><b>${isLibre(l) && !lht(l) ? "" : fmtNum(lht(l))}</b></td></tr>`).join("")).join("")
     : `<tr><td colspan="6" class="mut">Aucune ligne détaillée (montant global).</td></tr>`;
   const paye = K === "facture" ? d.paye : 0;
+  const fc = K === "facture" ? d.fx : null, dedHt = r2(sum(ded, lht));
+  const avancement = fd?.avancement?.length ? `<div class="doc-recap"><b>Avancement des travaux (marché ${E2(fd.marche_ht)} HT)</b>${fd.avancement.map((a) => `<div><span>${esc(a.label)}</span><span class="num">${fmtNum(a.prev, 1)} % → ${fmtNum(a.cum, 1)} %</span></div>`).join("")}</div>` : "";
+  const fxTot = (fc && fc.any) || ded.length ? `${ded.length ? `<div><span>Total des travaux HT</span><span class="num">${E2(r2(d.montant_ht - dedHt))}</span></div>${ded.map((l) => `<div><span>${esc(l.designation)}</span><span class="num">- ${E2(-lht(l))}</span></div>`).join("")}` : ""}` : "";
+  const fxAdj = fc && fc.any ? `${fc.retenue ? `<div><span>Retenue de garantie ${fmtNum(fc.retenuePct, 1)} %</span><span class="num">- ${E2(fc.retenue)}</span></div>` : ""}${fc.prime ? `<div><span>Prime ${esc(fc.primeLib || "énergétique")}</span><span class="num">- ${E2(fc.prime)}</span></div>` : ""}${fc.prorata ? `<div><span>Compte prorata</span><span class="num">- ${E2(fc.prorata)}</span></div>` : ""}<div class="reste"><span>Net à payer</span><span class="num">${E2(fc.net)}</span></div>${fc.escompte ? `<div><span>Si payé avant le ${D(fc.limite)} (escompte ${fmtNum(fc.escomptePct, 1)} %)</span><span class="num">${E2(fc.netEsc)}</span></div>` : ""}` : "";
   return `<div class="doc">
     <div class="doc-h doc-top"><div><b>${esc(e.nom || "Votre entreprise")}</b><small>${esc(e.adresse || "")}</small><small>${esc([e.telephone, e.email].filter(Boolean).join(" · "))}</small></div>
-      <div style="text-align:right"><b>${k.label} ${esc(docNum(d, K))}</b><small>Date : ${D(d[k.df])}</small><small>${K === "devis" ? `Valable ${d.validite_jours} jours` : `Échéance : ${D(d.echeance)}`}</small></div></div>
+      <div style="text-align:right"><b>${K === "facture" ? esc(fxLabel(d)) : k.label} ${esc(docNum(d, K))}</b><small>Date : ${D(d[k.df])}</small><small>${K === "devis" ? `Valable ${d.validite_jours} jours` : `Échéance : ${D(d.echeance)}`}</small></div></div>
     <div class="doc-h"><div><small>${K === "devis" ? "Destinataire" : "Facturé à"}</small><b>${esc(c.nom || d.client_nom)}</b><small>${esc(c.adresse || "")}</small><small>${esc(c.ville || "")}</small></div>
       ${d.chantier_nom ? `<div style="text-align:right"><small>Chantier</small><b>${esc(d.chantier_nom)}</b></div>` : ""}</div>
-    ${recap}
+    ${recap}${avancement}
     <div class="tw"><table class="dt"><thead><tr><th class="n">N°</th><th>Désignation</th><th class="r">Quantité</th><th class="r">P.U. HT</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="totaux"><div><span>Total HT</span><span class="num">${E2(d.montant_ht)}</span></div>
+    <div class="totaux">${fxTot}<div><span>${ded.length ? "Reste à facturer HT" : "Total HT"}</span><span class="num">${E2(d.montant_ht)}</span></div>
       ${rates.map((t) => `<div><span>TVA ${fmtNum(t, t % 1 ? 1 : 0)} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}
       <div class="ttc"><span>Total TTC</span><span class="num">${E2(d.montant_ttc)}</span></div>
-      ${K === "facture" && paye > 0 ? `<div><span>Déjà réglé</span><span class="num">- ${E2(paye)}</span></div><div class="reste"><span>Reste à payer</span><span class="num">${E2(d.reste)}</span></div>` : ""}</div>
+      ${fxAdj}${K === "facture" && paye > 0 ? `<div><span>Déjà réglé</span><span class="num">- ${E2(paye)}</span></div><div class="reste"><span>Reste à payer</span><span class="num">${E2(d.reste)}</span></div>` : ""}</div>
     ${d.notes ? `<p class="mut" style="margin:18px 0 0;white-space:pre-line">${esc(d.notes)}</p>` : ""}</div>`;
 }
 const shareLink = (token) => new URL("p.html?t=" + token, location.href).href;
@@ -102,11 +110,13 @@ async function docDetail(K, id) {
   const p = partageOf(id);
   const st = docStatut(d, K);
   const fac = K === "devis" ? devisFacture(id) : null;
-  const dv = K === "facture" && d.devis_id ? byId(db.devis, d.devis_id) : null;
+  const dv = K === "facture" && (fdOf(id)?.devis_id || d.devis_id) ? byId(db.devis, fdOf(id)?.devis_id || d.devis_id) : null;
   let actions = btn("Visualiser le PDF", K === "devis" ? "devisPdf" : "facturePdf", id, "", "");
   if (K === "devis") {
-    if (fac) actions += `<a class="btn o" href="#/factures/${fac.id}">Voir la facture ${esc(fac.numero || "(brouillon)")}</a>`;
-    else if (d.statut !== "Refusé") actions += btn("Transformer en facture", "devisToFacture", id, "", "o w");
+    const nl = typeof fxLinked === "function" ? fxLinked(id).length : fac ? 1 : 0;
+    if (nl) actions += `<a class="btn o" href="#/factures/${(typeof fxLinked === "function" ? fxLinked(id)[0] : fac).id}">Voir ${nl > 1 ? "les " + nl + " factures" : "la facture"}</a>`;
+    if (d.statut === "Accepté" && db.v8 && fxResteDevis(d) > 0.5) actions += btn(nl ? "Facturer la suite" : "Facturer en plusieurs fois", "fxBilling", id, "", "o w");
+    if (!nl && d.statut !== "Refusé") actions += btn("Transformer en facture", "devisToFacture", id, "", "o w");
     if (d.statut === "Brouillon" || d.statut === "Envoyé") actions += btn(d.statut === "Brouillon" ? "Envoyer au client" : "Lien client", "devisSend", id, "", "o w");
     if (d.statut === "Brouillon") actions += btn("Modifier", "devisEdit", id, "", "o w");
     if (d.statut === "Envoyé") actions += btn("Marquer accepté", "devisStatut", id, "Accepté", "o w") + btn("Refusé", "devisStatut", id, "Refusé", "o w");
@@ -116,6 +126,7 @@ async function docDetail(K, id) {
     if (d.statut === "Brouillon") actions += btn("Émettre la facture", "factureEmettre", id, "", "w") + btn("Modifier", "factureEdit", id, "", "o w") + btn("Supprimer", "factureDel", id, "", "dn-o w");
     else {
       if (d.reste > 0 && d.statut !== "Annulée") actions += btn("Enregistrer un paiement", "payNew", id, "", "w");
+      if (db.v8 && d.statut !== "Annulée" && !fxIsAvoir(d)) actions += btn("Créer un avoir", "fxAvoir", id, "", "o w");
       if (d.statut !== "Annulée") actions += btn("Envoyer au client", "factureSend", id, "", "o w");
       if (d.statut !== "Annulée" && db.v7) actions += btn("Facture électronique", "efOpen", id, "", "o");
       if (d.statut_affiche === "En retard") actions += btn("Relancer", "factureRelance", id, "", "o w");
@@ -138,16 +149,17 @@ async function docDetail(K, id) {
   const payHtml = K === "facture" && paiements.length
     ? card("Paiements reçus", paiements.map((x) => `<div class="row"><div><b>${E2(x.montant)}</b><small>${D(x.date_paiement)} · ${esc(x.mode)}</small></div><button class="lk w" data-act="payDel" data-id="${x.id}">Supprimer</button></div>`).join(""))
     : "";
-  const echHtml = K === "facture" && d.statut !== "Annulée" ? echCard(d) : "";
-  return page(`${esc(docNum(d, K))} ${chip(st)}`, `${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
-    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) : ""}${echHtml}${payHtml}</div></div>`,
+  const echHtml = K === "facture" && d.statut !== "Annulée" && !fxIsAvoir(d) ? echCard(d) : "";
+  return page(`${esc(docNum(d, K))} ${chip(st)}`, `${K === "facture" && fxNat(d) !== "Facture" ? esc(fxLabel(d)) + " · " : ""}${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
+    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) + fxDevisCard(d) : fxDetailCard(d) + fxLinkedCard(d)}${echHtml}${payHtml}</div></div>`,
     crumbs([K === "devis" ? "Devis" : "Factures", k.route], [docNum(d, K)]));
 }
 
 /* ---------- Éditeur (devis / facture) : catégories > lignes (+ description) ---------- */
 function ligneRow(l = {}) {
   const tva = l.taux_tva ?? (Number(db.ent.taux_tva_defaut) || 20);
-  return `<tr class="lr" data-tp="${l._tp ?? ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="Désignation de la prestation"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea></td>
+  const nat = l.nature || "normale";
+  return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}" data-tp="${l._tp ?? ""}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Poste libre : libellé (ex : frais de déplacement, remise commerciale)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea></td>
     <td style="width:78px"><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}"></td>
     <td style="width:86px"><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}"></td>
     <td style="width:104px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
@@ -172,7 +184,7 @@ function readLignes(root) {
   $$(".cat", root).forEach((sec) => {
     const categorie = $('[data-f="cat"]', sec).value.trim();
     $$(".lr", sec).forEach((tr) => out.push({
-      categorie, designation: $('[data-f="des"]', tr).value.trim(), description: $('[data-f="desc"]', tr).value.trim(),
+      categorie, nature: tr.dataset.nat || "normale", ref_facture_id: tr.dataset.ref || null, designation: $('[data-f="des"]', tr).value.trim(), description: $('[data-f="desc"]', tr).value.trim(),
       quantite: parseNum($('[data-f="qte"]', tr).value), unite: $('[data-f="uni"]', tr).value.trim() || "u",
       prix_unitaire_ht: parseNum($('[data-f="pu"]', tr).value), taux_tva: Number($('[data-f="tva"]', tr).value),
     }));
@@ -219,7 +231,8 @@ function recalcLignes(root) {
 async function saveCats(K, id, ls) {
   const k = KD[K];
   const rows = await q(sb.from(k.lt).select("id").eq(k.fk, id).order("position"));
-  await Promise.all(rows.map((r, i) => (ls[i] ? q(sb.from(k.lt).update({ categorie: ls[i].categorie || null, description: ls[i].description || null }).eq("id", r.id)) : null)));
+  const ext = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : {});
+  await Promise.all(rows.map((r, i) => (ls[i] ? q(sb.from(k.lt).update({ categorie: ls[i].categorie || null, description: ls[i].description || null, ...ext(ls[i]) }).eq("id", r.id)) : null)));
 }
 async function copyCats(did, fid) {
   try {
@@ -242,8 +255,9 @@ async function docForm(K, d, opts = {}) {
     ${fld({ k: "date", l: K === "devis" ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
     ${K === "devis" ? fld({ k: "validite_jours", l: "Validité (jours)", t: "number", v: d?.validite_jours || 30 }) : fld({ k: "echeance", l: "Échéance de paiement", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}
     <div class="full"><div id="cats">${groupCats(lignes).map(catBlock).join("")}</div>
-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap"><span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addc">+ Ajouter une catégorie</button><button type="button" class="btn o sm" id="addov">Ajouter depuis la bibliothèque</button></span><div class="totbox" id="totbox"></div></div></div>
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap"><span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addc">+ Ajouter une catégorie</button><button type="button" class="btn o sm" id="addov">Ajouter depuis la bibliothèque</button>${K === "facture" ? `<button type="button" class="btn o sm" id="addlibre">+ Poste libre</button>` : ""}</span><div class="totbox" id="totbox"></div></div></div>
     ${fld({ k: "notes", l: "Remarques (apparaissent sur le document)", t: "textarea", v: d?.notes || "", r: 0, cls: "full" })}
+    ${K === "facture" && db.v8 && fxNat(d || {}) !== "Avoir" ? fxAdjFields(d ? fdOf(d.id) : {}) : ""}
   </div>`;
   modal(d ? `Modifier ${esc(docNum(d, K))}` : `Nouveau ${k.label.toLowerCase()}`, body, {
     xl: true, wide: true, submit: d ? "Enregistrer" : "Créer le brouillon",
@@ -253,6 +267,7 @@ async function docForm(K, d, opts = {}) {
       m.addEventListener("click", (e) => {
         const t = e.target;
         if (t.closest("#addov")) return ovPicker((o) => ovInsertLine(m, o));
+        if (t.closest("#addlibre")) { const lb = $$(".lb", m).pop(); lb.insertAdjacentHTML("beforeend", ligneRow({ nature: "libre", unite: "", prix_unitaire_ht: "" })); $$('[data-f="des"]', lb).pop().focus(); return recalcLignes(m); }
         if (t.closest("#addc")) { $("#cats", m).insertAdjacentHTML("beforeend", catBlock({ cat: "", lignes: [{}] })); $$('[data-f="cat"]', m).pop().focus(); }
         const al = t.closest("[data-addl]");
         if (al) { const lb = $(".lb", al.closest(".cat")); lb.insertAdjacentHTML("beforeend", ligneRow({ taux_tva: Number($('[data-f="tva"]', lb.lastElementChild)?.value) || undefined })); $$('[data-f="des"]', lb).pop().focus(); }
@@ -270,7 +285,9 @@ async function docForm(K, d, opts = {}) {
       const cid = await resolveClient(v);
       const payload = { id: d?.id || null, client_id: cid, chantier_id: v.chantier_id || null, date: v.date, notes: v.notes || null, lignes: ls,
         ...(K === "devis" ? { validite_jours: parseInt(v.validite_jours) || 30 } : { echeance: v.echeance }) };
+      const adj = K === "facture" && db.v8 && $("#f_aj_ret", api.el) ? fxReadAdj(v) : null;
       const id = await q(sb.rpc("sauver_document", { p_kind: K, p: payload }));
+      if (adj) await fxSaveDetails(id, adj);
       try { await saveCats(K, id, ls); } catch (e) { console.warn(e); toast("Document enregistré, mais les catégories et descriptions n'ont pas pu l'être : exécutez migration_v4.sql dans Supabase.", "dn"); }
       api.close();
       toast(d ? "Modifications enregistrées." : `${k.label} créé en brouillon.`, "ok");
@@ -305,12 +322,13 @@ async function docPdfBytes(K, id) {
   const k = KD[K], d = byId(db[k.list], id);
   const lignes = await lignesOf(K, id);
   const c = clientOf(d.client_id) || {}, ch = d.chantier_id ? byId(db.chantiers, d.chantier_id) : null;
-  const dv = K === "facture" && d.devis_id ? byId(db.devis, d.devis_id) : null;
+  const dv = K === "facture" && (fdOf(id)?.devis_id || d.devis_id) ? byId(db.devis, fdOf(id)?.devis_id || d.devis_id) : null;
   const data = {
     kind: K, numero: d.numero || (K === "facture" ? "(brouillon)" : ""), date: d[k.df], echeance: d.echeance, validite_jours: d.validite_jours,
     statut: d.statut, notes: d.notes, client: { nom: c.nom || d.client_nom, adresse: c.adresse, ville: c.ville, email: c.email, telephone: c.telephone },
     chantier: ch ? { nom: ch.nom, ville: ch.ville } : null, lignes, ht: d.montant_ht, tva: d.montant_tva, ttc: d.montant_ttc, taux_tva: d.taux_tva,
     paye: d.paye || 0, devis_numero: dv?.numero,
+    fx: K === "facture" && typeof fxPdfData === "function" ? fxPdfData(d) : null,
   };
   return PilotPdf.build(data, await pdfContext(K));
 }

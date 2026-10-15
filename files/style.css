@@ -404,3 +404,7 @@ tr.tot td{font-weight:650;background:var(--sunk)}
 .bkact{display:flex;gap:12px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
 .bkprev{background:var(--sunk);border:1px solid var(--line2);border-radius:8px;padding:12px 14px;line-height:1.6}
 .ok{color:var(--ok)}
+
+/* Facturation BTP : postes libres et déductions (sans quantité ni unité) */
+.lr-x [data-f="qte"], .lr-x [data-f="uni"] { visibility: hidden; }
+.lr-x [data-f="des"] { font-style: italic; }
