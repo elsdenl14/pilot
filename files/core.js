@@ -28,6 +28,7 @@ const emptyDb = () => ({
   documents: [], comptes: [], bankTx: [], v6: false, bkSug: null,
   efact: [], sigs: [], connexions: [], cx: {}, nbOuvrages: 0, v7: false,
   fd: {}, v8: false,
+  rg: { ribs: [], cribs: [], cheques: [], remises: [], credits: [], suivi: [], liens: [] }, v9: false,
 });
 let db = emptyDb();
 
@@ -108,6 +109,8 @@ async function load() {
   } catch (e) { db.efact = []; db.sigs = []; db.connexions = []; db.cx = {}; db.nbOuvrages = 0; db.v7 = false; db.v7err = e?.message || String(e); }
   // v8 : facturation BTP (acomptes, situations, avoirs…), facultatif tant que migration_v8.sql n'est pas lancée
   try { await loadV8(); db.v8 = true; db.v8err = ""; } catch (e) { db.fd = {}; db.v8 = false; db.v8err = e?.message || String(e); }
+  // v9 : règlements clients (RIB, chèques, crédits, relances), facultatif tant que migration_v9.sql n'est pas lancée
+  try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }
 }
 const setupV7 = (what = "cette fonction") =>
   `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Pour activer ${what}, exécutez <b>migration_v7.sql</b> dans Supabase (SQL Editor), puis rechargez la page.${db.v7err ? `<br><br>Erreur renvoyée par Supabase : <code>${esc(db.v7err)}</code>` : ""}</p>`;
@@ -124,7 +127,7 @@ const depensesAPayer = () => db.depenses.filter((d) => d.statut === "À payer");
 const partageOf = (id) => db.partages.find((p) => p.doc_id === id);
 const encaisseTotal = () => sum(db.paiements, (p) => p.montant);
 const decaisseTotal = () => sum(db.depenses.filter((d) => d.statut === "Payée"), (d) => d.montant_ttc);
-const tresorerie = () => db.ent.tresorerie_initiale + encaisseTotal() - decaisseTotal();
+const tresorerie = () => db.ent.tresorerie_initiale + encaisseTotal() - decaisseTotal() + (typeof rgCashAdj === "function" ? rgCashAdj() : 0);
 
 /* ===================== Icônes ===================== */
 const ic = {

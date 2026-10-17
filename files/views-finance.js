@@ -31,7 +31,7 @@ const COMPTA = {
     const decaissements = sum(payees, (d) => d.montant_ttc);
     const tresoFin =
       (Number(db.ent.tresorerie_initiale) || 0) +
-      sum(db.paiements.filter((p) => p.date_paiement <= to), (p) => p.montant) -
+      sum(db.paiements.filter((p) => p.date_paiement <= to), (p) => p.montant) + (typeof rgCashAdj === "function" ? rgCashAdj(to) : 0) -
       sum(db.depenses.filter((d) => d.statut === "Payée" && (d.date_paiement || d.date_depense) <= to), (d) => d.montant_ttc);
     return {
       caHT, tvaCollectee, tvaDeductible, tvaAPayer: r2(tvaCollectee - tvaDeductible), achats, depenses,
@@ -63,8 +63,8 @@ const ACHAT_CATS = new Set(["Matériaux", "Sous-traitance"]);
 
 V.paiements = () => {
   const tab = ST.tab.paiements || "enc";
-  const t = tabs("paiements", [["enc", "Encaissements"], ["dep", "Dépenses et achats"]], tab);
-  return tab === "enc" ? paiementsEnc(t) : paiementsDep(t);
+  const t = tabs("paiements", [["enc", "Encaissements"], ["suivi", "Suivi et relances"], ["cheques", "Chèques"], ["credits", "Crédits clients"], ["dep", "Dépenses et achats"]], tab);
+  return tab === "enc" ? paiementsEnc(t) : tab === "dep" ? paiementsDep(t) : rgTab(tab, t);
 };
 V.depenses = (r) => {
   ST.tab.paiements = "dep";
@@ -131,8 +131,11 @@ function payForm(fid, amount) {
     onSubmit: async (v, api) => {
       const f = byId(ouv, v.facture_id), m = parseNum(v.montant);
       if (m <= 0) throw new Error("Le montant doit être supérieur à zéro.");
-      if (m > f.reste + 0.001) throw new Error(`Ce montant dépasse le reste dû (${E2(f.reste)}).`);
-      await q(sb.from("paiements").insert({ facture_id: v.facture_id, montant: m, date_paiement: v.date_paiement, mode: v.mode, reference: v.reference || null }));
+      if (m > f.reste + 0.001) {
+        if (!db.v9) throw new Error(`Ce montant dépasse le reste dû (${E2(f.reste)}). Pour gérer les trop-perçus, exécutez migration_v9.sql.`);
+        if (!confirm(rgExcessMsg(f, m))) return;
+        await rgPay(f, m, v.date_paiement, v.mode, v.reference);
+      } else await q(sb.from("paiements").insert({ facture_id: v.facture_id, montant: m, date_paiement: v.date_paiement, mode: v.mode, reference: v.reference || null }));
       api.close(); toast("Paiement enregistré.", "ok"); await refresh();
     },
   });
@@ -427,6 +430,7 @@ V.params = () => {
       <div class="fl"><span>Logo (modèle classique)</span><div style="display:flex;gap:8px;align-items:center">${e.logo_path ? `<span class="badge-auto">Logo enregistré</span>${btn("Retirer", "logoDel", "", "", "o sm w")}` : ""}${btn(e.logo_path ? "Remplacer" : "Importer un logo", "logoPick", "", "", "o sm w")}</div></div></div>
       <p class="note" style="border-top:1px solid var(--line2)">Importez votre propre design de devis ou de facture (PDF, PNG ou JPG, une page A4) : Pilot le place en fond de chaque page et écrit le contenu par-dessus, à chaque génération.</p>
       ${modeleBlock("devis", "Devis")}${modeleBlock("facture", "Facture")}`)}
+    ${rgRibCard()}
     ${card("Compte", `<dl class="kv"><dt>Connecté</dt><dd>${esc(email)}</dd></dl><div class="cb" style="border-top:1px solid var(--line2)">${btn("Se déconnecter", "logout", "", "", "o")}</div>`)}`);
 };
 const entPatch = async (patch) => {

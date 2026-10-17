@@ -28,3 +28,7 @@ dl{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:0}dt{color:va
 label.chk{display:flex;gap:10px;align-items:flex-start;color:var(--tx);font-size:14px}
 label.chk input{width:auto;margin-top:3px}
 .badge.ac{color:var(--acc);border-color:var(--acc)}
+
+.payopt{border-top:1px solid var(--line);padding:14px 0 4px;margin-top:10px}.payopt:first-of-type{border-top:0;margin-top:0;padding-top:0}
+.ribrow{display:flex;gap:18px;flex-wrap:wrap;align-items:center;justify-content:space-between}.ribrow dl{flex:1;min-width:240px}
+.qrbox{text-align:center}.qrbox small{display:block}

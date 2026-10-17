@@ -96,7 +96,11 @@ async function del(table, id, msg, after, done = "Supprimé.") {
 
 /* ---------- Actions (data-act) ---------- */
 const ACT = {
+  ...(typeof achatActions !== "undefined" ? achatActions : {}),
+  ...(typeof fileActions !== "undefined" ? fileActions : {}),
+  ...(typeof banqueActions !== "undefined" ? banqueActions : {}),
   ...docActions,
+  ...(typeof rgActions !== "undefined" ? rgActions : {}),
   ...(typeof ovActions !== "undefined" ? ovActions : {}),
   ...(typeof signatureActions !== "undefined" ? signatureActions : {}),
   ...(typeof efActions !== "undefined" ? efActions : {}),
@@ -146,7 +150,10 @@ const ACT = {
   },
 
   payNew: (id, arg) => payForm(id || "", arg),
-  payDel: (id) => del("paiements", id, "Supprimer ce paiement ?"),
+  payDel: async (id) => {
+    if (db.v9 && typeof rgPayDel === "function" && (await rgPayDel(id)) !== "default") return;
+    return del("paiements", id, "Supprimer ce paiement ?");
+  },
   depNew: (id, arg) => depForm(null, { chantier: arg?.startsWith("chantier:") ? arg.slice(9) : "" }),
   depImport: () => depImport(),
   depEdit: (id) => depForm(byId(db.depenses, id)),

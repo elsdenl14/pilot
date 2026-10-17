@@ -53,10 +53,12 @@ function priorites() {
 
   for (const f of enRetard()) {
     const d = daysBetween(f.echeance, t);
-    add(d > 30 || f.reste >= 5000 ? "u" : "i", 300 + Math.min(d, 120) + Math.min(f.reste / 100, 80),
-      `${f.numero} · ${f.client_nom}`, `En retard de ${d} jour${d > 1 ? "s" : ""}, échue le ${D(f.echeance)}${typeof bkMatchFor === "function" && bkMatchFor(f) ? " · un virement correspondant est peut-être déjà arrivé en banque" : ""}`, f.reste,
+    const pm = db.v9 ? rgPromesse(f.id) : null, promis = pm && pm.date_promesse >= t;
+    add(promis ? "s" : d > 30 || f.reste >= 5000 ? "u" : "i", 300 + Math.min(d, 120) + Math.min(f.reste / 100, 80) - (promis ? 250 : 0),
+      `${f.numero} · ${f.client_nom}`, `En retard de ${d} jour${d > 1 ? "s" : ""}, échue le ${D(f.echeance)}${promis ? ` · paiement promis pour le ${D(pm.date_promesse)}` : ""}${typeof bkMatchFor === "function" && bkMatchFor(f) ? " · un virement correspondant est peut-être déjà arrivé en banque" : ""}`, f.reste,
       { label: "Relancer", act: "factureRelance", id: f.id }, `factures/${f.id}`);
   }
+  if (typeof rgPriorites === "function") rgPriorites(add, t);
   for (const f of ouvertes()) {
     const d = daysBetween(t, f.echeance);
     if (d >= 0 && d <= 7)
@@ -307,6 +309,7 @@ function clientDetail(id) {
       ${card("Devis", docTable("devis", devis))}
       ${card("Factures", docTable("factures", fact))}
     </div><div>
+      ${rgCribCard(id)}
       ${dcCard("client", id)}
       ${card("Coordonnées", `<dl class="kv"><dt>Email</dt><dd>${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : "-"}</dd><dt>Téléphone</dt><dd>${esc(c.telephone || "-")}</dd><dt>Adresse</dt><dd>${esc(c.adresse || "-")}</dd><dt>Ville</dt><dd>${esc(c.ville || "-")}</dd>${db.cx[id]?.siret ? `<dt>SIRET</dt><dd>${esc(db.cx[id].siret)}</dd>` : ""}<dt>Notes</dt><dd>${esc(c.notes || "-").replace(/\n/g, "<br>")}</dd></dl>`)}
       ${card("Chantiers", chs.length ? chs.map((x) => `<div class="row lnk" data-go="chantiers/${x.id}" style="cursor:pointer"><div><b>${esc(x.nom)}</b><small>${esc(x.ville || "")}</small></div>${chip(x.statut)}</div>`).join("") : `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Aucun chantier.</p>`, btn("Ajouter", "chantierNew", "", "client:" + id, "o sm w"))}

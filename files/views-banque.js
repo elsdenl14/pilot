@@ -284,10 +284,17 @@ async function bkApply(tx, s, rest) {
   try {
     if (s.type === "facture") {
       const f = s.f, left = rest ? (rest[f.id] ?? f.reste) : f.reste;
-      if (tx.montant > left + 0.005) throw new Error(`Ce montant (${E2(tx.montant)}) dépasse le reste dû de la facture ${f.numero} (${E2(left)}).`);
-      const pay = await q(sb.from("paiements").insert({ facture_id: f.id, montant: tx.montant, date_paiement: tx.date_op, mode: bkMode(tx.libelle, false), reference: ("Banque · " + tx.libelle).slice(0, 120) }).select("id").single());
+      const exc = r2(tx.montant - left);
+      if (exc > 0.005 && !db.v9) throw new Error(`Ce montant (${E2(tx.montant)}) dépasse le reste dû de la facture ${f.numero} (${E2(left)}).`);
+      const pay = await q(sb.from("paiements").insert({ facture_id: f.id, montant: exc > 0.005 ? left : tx.montant, date_paiement: tx.date_op, mode: bkMode(tx.libelle, false), reference: ("Banque · " + tx.libelle).slice(0, 120) }).select("id").single());
       try { await bkLinkTx(tx.id, { statut: "Rapprochée", lien_type: "paiement", facture_id: f.id, paiement_id: pay.id }); }
       catch (e) { try { await q(sb.from("paiements").delete().eq("id", pay.id)); } catch (e2) {} throw e; }
+      if (exc > 0.005) {
+        try { await q(sb.from("client_credits").insert({ client_id: f.client_id, montant: exc, type: "Trop-perçu", facture_id: f.id, paiement_id: pay.id, date_op: tx.date_op, mode: "Virement", reference: ("Banque · " + tx.libelle).slice(0, 120), motif: `Excédent sur ${f.numero}` })); }
+        catch (e) { try { await q(sb.from("banque_transactions").update({ statut: "À rapprocher", lien_type: null, facture_id: null, paiement_id: null }).eq("id", tx.id)); await q(sb.from("paiements").delete().eq("id", pay.id)); } catch (e2) {} throw e; }
+        if (rest) rest[f.id] = 0;
+        return { msg: `Facture ${f.numero} soldée ; ${E2(exc)} d'excédent gardés en crédit pour ${f.client_nom} (trop-perçu).` };
+      }
       if (rest) rest[f.id] = r2(left - tx.montant);
       return { msg: left - tx.montant < 0.005 ? `Facture ${f.numero} marquée payée.` : `Paiement partiel enregistré sur ${f.numero} : il reste ${E2(left - tx.montant)} à encaisser.` };
     }
@@ -347,7 +354,10 @@ async function bkUndo(id) {
   if (tx.statut === "Rapprochée") {
     const txt = { paiement: "Le paiement créé sera supprimé et la facture redeviendra impayée (ou partiellement payée).", depense_payee: "La dépense repassera en « À payer ».", paiement_lie: "Le paiement déjà enregistré est conservé.", depense_liee: "La dépense est conservée.", depense_creee: "La dépense créée est conservée : supprimez-la à la main si besoin." }[tx.lien_type] || "";
     if (!confirm(`Annuler ce rapprochement ?\n\n${txt}`)) return;
-    if (tx.lien_type === "paiement" && tx.paiement_id) await q(sb.from("paiements").delete().eq("id", tx.paiement_id));
+    if (tx.lien_type === "paiement" && tx.paiement_id) {
+      if (db.v9 && typeof rgUnwindPay === "function") { try { await rgUnwindPay(tx.paiement_id, ["Trop-perçu"]); } catch (e) { return toast(friendly(e), "dn"); } }
+      await q(sb.from("paiements").delete().eq("id", tx.paiement_id));
+    }
     if (tx.lien_type === "depense_payee" && tx.depense_id) await q(sb.from("depenses").update({ statut: "À payer", date_paiement: null, mode: null }).eq("id", tx.depense_id));
   }
   await q(sb.from("banque_transactions").update(clear).eq("id", id));

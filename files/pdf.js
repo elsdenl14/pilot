@@ -389,6 +389,16 @@ const PilotPdf = (() => {
       if (fc?.prime) para("Prime énergétique", `Prime ${fc.primeLib || "énergétique"} de ${money(fc.prime)} déduite du net à payer par le client : elle est perçue par l'entreprise.`);
       if (fc?.prorata) para("Compte prorata", `Participation au compte prorata de ${money(fc.prorata)} retenue sur cette facture.`);
       if (ent.iban) para("Règlement par virement", `IBAN : ${ent.iban}${ent.bic ? "   -   BIC : " + ent.bic : ""}\nMerci de rappeler le numéro de facture ${data.numero || ""} en référence.`);
+      if (data.qr && data.qr.length && ent.iban) {
+        const n = data.qr.length, S = 70, mod = S / (n + 8);
+        need(S + 4);
+        const y0 = y + 4;
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (data.qr[r][c] === "1") page.drawRectangle({ x: ML + (c + 4) * mod, y: y0 - (r + 5) * mod, width: mod + 0.15, height: mod + 0.15, color: rgb(0, 0, 0) });
+        const tl = wrap("Payer par virement en scannant ce QR code avec l'application de votre banque : le montant, le bénéficiaire et la référence sont préremplis.", font, 8.5, W - 2 * ML - S - 10);
+        let ty = y0 - 26;
+        for (const l of tl) { txt(l, ML + S + 4, ty, { size: 8.5, color: GREY }); ty -= 11.5; }
+        y = y0 - S - 2;
+      }
     } else {
       para("Conditions", `Devis valable ${data.validite_jours || 30} jours à compter de sa date d'émission. Les travaux débuteront après réception du devis daté et signé.`);
       need(104);

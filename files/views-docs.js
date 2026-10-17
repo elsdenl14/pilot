@@ -129,7 +129,7 @@ async function docDetail(K, id) {
       if (db.v8 && d.statut !== "Annulée" && !fxIsAvoir(d)) actions += btn("Créer un avoir", "fxAvoir", id, "", "o w");
       if (d.statut !== "Annulée") actions += btn("Envoyer au client", "factureSend", id, "", "o w");
       if (d.statut !== "Annulée" && db.v7) actions += btn("Facture électronique", "efOpen", id, "", "o");
-      if (d.statut_affiche === "En retard") actions += btn("Relancer", "factureRelance", id, "", "o w");
+      if (d.statut_affiche === "En retard" && !db.v9) actions += btn("Relancer", "factureRelance", id, "", "o w");
       if (d.statut === "Envoyée" && !d.paye) actions += btn("Annuler", "factureAnnuler", id, "", "dn-o w");
     }
   }
@@ -151,7 +151,7 @@ async function docDetail(K, id) {
     : "";
   const echHtml = K === "facture" && d.statut !== "Annulée" && !fxIsAvoir(d) ? echCard(d) : "";
   return page(`${esc(docNum(d, K))} ${chip(st)}`, `${K === "facture" && fxNat(d) !== "Facture" ? esc(fxLabel(d)) + " · " : ""}${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
-    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) + fxDevisCard(d) : fxDetailCard(d) + fxLinkedCard(d)}${echHtml}${payHtml}</div></div>`,
+    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) + fxDevisCard(d) : fxDetailCard(d) + fxLinkedCard(d)}${echHtml}${payHtml}${K === "facture" ? rgInvoiceCard(d) : ""}</div></div>`,
     crumbs([K === "devis" ? "Devis" : "Factures", k.route], [docNum(d, K)]));
 }
 
@@ -328,6 +328,7 @@ async function docPdfBytes(K, id) {
     statut: d.statut, notes: d.notes, client: { nom: c.nom || d.client_nom, adresse: c.adresse, ville: c.ville, email: c.email, telephone: c.telephone },
     chantier: ch ? { nom: ch.nom, ville: ch.ville } : null, lignes, ht: d.montant_ht, tva: d.montant_tva, ttc: d.montant_ttc, taux_tva: d.taux_tva,
     paye: d.paye || 0, devis_numero: dv?.numero,
+    qr: K === "facture" && d.statut !== "Brouillon" && typeof rgEpcMatrix === "function" ? rgEpcMatrix(d) : null,
     fx: K === "facture" && typeof fxPdfData === "function" ? fxPdfData(d) : null,
   };
   return PilotPdf.build(data, await pdfContext(K));
@@ -408,7 +409,7 @@ const docActions = {
   devisSend: (id) => docShare("devis", id),
   factureSend: (id) => docShare("facture", id),
   devisRelance: (id) => docRelance("devis", id),
-  factureRelance: (id) => docRelance("facture", id),
+  factureRelance: (id) => (db.v9 && typeof rlOpen === "function" ? rlOpen(id) : docRelance("facture", id)),
   devisStatut: async (id, s) => { await q(sb.from("devis").update({ statut: s }).eq("id", id)); toast(`Devis marqué « ${s.toLowerCase()} ».`, "ok"); await refresh(); },
   devisDel: async (id) => {
     if (!confirm("Supprimer ce brouillon de devis ?")) return;
