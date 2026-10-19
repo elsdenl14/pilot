@@ -29,6 +29,7 @@ const emptyDb = () => ({
   efact: [], sigs: [], connexions: [], cx: {}, nbOuvrages: 0, v7: false,
   fd: {}, v8: false,
   rg: { ribs: [], cribs: [], cheques: [], remises: [], credits: [], suivi: [], liens: [] }, v9: false,
+  cf: { journal: [], clotures: [] }, ml: { modeles: [], gmail: null, mails: [] }, nt: [], pv: { list: [], reserves: [] }, v10: false,
 });
 let db = emptyDb();
 
@@ -110,6 +111,7 @@ async function load() {
   // v8 : facturation BTP (acomptes, situations, avoirs…), facultatif tant que migration_v8.sql n'est pas lancée
   try { await loadV8(); db.v8 = true; db.v8err = ""; } catch (e) { db.fd = {}; db.v8 = false; db.v8err = e?.message || String(e); }
   // v9 : règlements clients (RIB, chèques, crédits, relances), facultatif tant que migration_v9.sql n'est pas lancée
+  try { if (typeof loadV10 === "function") await loadV10(); } catch (e) { db.v10 = false; console.warn(e); }
   try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }
 }
 const setupV7 = (what = "cette fonction") =>
@@ -131,6 +133,9 @@ const tresorerie = () => db.ent.tresorerie_initiale + encaisseTotal() - decaisse
 
 /* ===================== Icônes ===================== */
 const ic = {
+  mails: "M3 6h18v12H3z M3 7l9 6 9-6",
+  notes: "M5 3h14v18H5z M9 8h6 M9 12h6 M9 16h4",
+  pv: "M6 3h9l4 4v14H6z M9 15l2 2 4-4",
   home: "M3 11l9-7 9 7 M5 10v10h14V10 M10 20v-6h4v6",
   chantiers: "M3 8h18v12H3z M8 8V4h8v4 M3 13h18",
   clients: "M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6 M16 4.5a3.5 3.5 0 010 6.5 M18 14.5c2 .8 3.5 2.6 3.5 5.5",
@@ -163,6 +168,9 @@ const NAV = [
   ["devis", "Devis", null],
   ["factures", "Factures", null],
   ["efacture", "Facture électronique", null],
+  ["mails", "Messagerie", null],
+  ["notes", "Notes", null],
+  ["pv", "PV de réception", null],
   ["ouvrages", "Bibliothèque", null],
   ["documents", "Documents", null],
   ["paiements", "Paiements", "Finances"],
@@ -223,6 +231,8 @@ function afterLoadV7() {
   setTimeout(() => {
     try { if (typeof sigAutoArchive === "function") sigAutoArchive(); } catch (e) { console.warn(e); }
     try { if (typeof cxAutoSync === "function") cxAutoSync(); } catch (e) { console.warn(e); }
+    try { if (typeof pvAutoArchive === "function") pvAutoArchive(); } catch (e) { console.warn(e); }
+    try { if (typeof gmAutoSync === "function") gmAutoSync(); } catch (e) { console.warn(e); }
   }, 1200);
 }
 
@@ -419,6 +429,7 @@ async function start(session) {
     $("#robadge").hidden = !ro;
     if (!ro) { try { await sb.rpc("generer_alertes"); } catch (e) { console.warn("alertes", e); } }
     await load();
+    try { if (typeof gmHandleReturn === "function") await gmHandleReturn(); } catch (e) { console.warn("retour gmail", e); }
     try { if (typeof cxHandleReturn === "function") await cxHandleReturn(); } catch (e) { console.warn("retour banque", e); }
     $("#au")?.remove();
     renderBell();

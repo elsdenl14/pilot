@@ -263,8 +263,9 @@ V.compta = (r) => {
   // lien profond : #/compta?tab=banque (consommé une seule fois)
   if (r?.qs?.get("tab")) { ST.tab.compta = r.qs.get("tab"); history.replaceState(null, "", "#/compta"); }
   const tab = ST.tab.compta || "synthese", y = ST.year;
-  const t = tabs("compta", [["synthese", "Synthèse"], ["banque", "Banque"], ["journal", "Journal"], ["tva", "TVA"], ["comptable", "Espace comptable"]], tab);
+  const t = tabs("compta", [["synthese", "Synthèse"], ["banque", "Banque"], ["journal", "Journal"], ["tva", "TVA"], ...(typeof cfTab === "function" ? [["conformite", "Conformité"]] : []), ["comptable", "Espace comptable"]], tab);
   if (tab === "banque") return banqueTab(t);
+  if (tab === "conformite" && typeof cfTab === "function") return cfTab(t);
   const yr = `<div class="seg"><button data-act="yearPrev" aria-label="Année précédente">‹</button><button disabled style="font-weight:600;color:var(--tx)">${y}</button><button data-act="yearNext" aria-label="Année suivante">›</button></div>`;
   const reg = (db.ent.tva_regime || "encaissements") === "debits" ? "sur les débits (à la facturation)" : "sur les encaissements (au paiement)";
   const note = `<p class="note">Chiffres estimés d'après vos factures, paiements et dépenses saisis dans Pilot. TVA collectée calculée ${reg}, réglable dans Paramètres. À valider avec votre comptable.</p>`;
@@ -423,7 +424,7 @@ V.params = () => {
   return page("Paramètres", "L'identité de l'entreprise, la facturation et l'apparence des documents.", "",
     `<form data-form="ent">${card("Entreprise", `<div class="cb"><div class="frm">${f("nom", "Nom de l'entreprise", { r: 1, cls: "full" })}${f("forme_juridique", "Forme juridique et capital", { ph: "SARL au capital de 10 000 €" })}${f("siret", "SIRET")}${f("tva_intracom", "N° de TVA intracommunautaire")}${f("rcs", "RCS / RM")}${f("adresse", "Adresse", { cls: "full" })}${f("telephone", "Téléphone")}${f("email", "Email", { t: "email" })}${f("mentions_legales", "Mentions en bas des documents", { t: "textarea", cls: "full", rows: 2, hint: "Assurance décennale, médiateur, etc." })}</div></div>`)}
     ${card("Facturation et comptabilité", `<div class="cb"><div class="frm">${f("delai_paiement_jours", "Délai de paiement par défaut (jours)", { t: "number", v: e.delai_paiement_jours ?? 30 })}${f("taux_tva_defaut", "TVA par défaut (%)", { t: "number", v: String(e.taux_tva_defaut ?? 20).replace(".", ",") })}
-      ${fld({ k: "tva_regime", l: "TVA collectée", t: "select", o: [{ v: "encaissements", l: "Sur les encaissements (au paiement)" }, { v: "debits", l: "Sur les débits (à la facturation)" }], v: e.tva_regime || "encaissements", hint: "Pour des prestations de services, la TVA est en général exigible à l'encaissement. Demandez à votre comptable." })}
+      ${fld({ k: "tva_regime", l: "TVA collectée", t: "select", o: [{ v: "encaissements", l: "Sur les encaissements (au paiement)" }, { v: "debits", l: "Sur les débits (à la facturation)" }, { v: "franchise", l: "Franchise en base (pas de TVA)" }], v: e.tva_regime || "encaissements", hint: "Pour des prestations de services, la TVA est en général exigible à l'encaissement. Demandez à votre comptable." })}
       ${f("jour_tva", "Jour limite de déclaration de TVA", { t: "number", v: e.jour_tva ?? 20, hint: "Sert au rappel sur l'accueil." })}${f("tresorerie_initiale", "Trésorerie de départ (€)", { t: "number", v: String(e.tresorerie_initiale ?? 0).replace(".", ","), hint: "Solde du compte avant votre premier paiement dans Pilot." })}${f("iban", "IBAN")}${f("bic", "BIC")}</div></div>`)}
     <div class="pa w" style="margin:16px 0"><button class="btn" type="submit">Enregistrer</button></div></form>
     ${card("Documents PDF : devis et factures", `<div class="cb" style="display:flex;gap:22px;flex-wrap:wrap;align-items:center"><label class="fl"><span>Couleur d'accent (modèle classique)</span><input type="color" class="swatch" id="couleur" value="${esc(regl.couleur || "#243b53")}" ${ro ? "disabled" : ""}></label>
@@ -431,6 +432,8 @@ V.params = () => {
       <p class="note" style="border-top:1px solid var(--line2)">Importez votre propre design de devis ou de facture (PDF, PNG ou JPG, une page A4) : Pilot le place en fond de chaque page et écrit le contenu par-dessus, à chaque génération.</p>
       ${modeleBlock("devis", "Devis")}${modeleBlock("facture", "Facture")}`)}
     ${rgRibCard()}
+    ${typeof lgCard === "function" ? lgCard() : ""}
+    ${typeof mlCard === "function" ? mlCard() : ""}
     ${card("Compte", `<dl class="kv"><dt>Connecté</dt><dd>${esc(email)}</dd></dl><div class="cb" style="border-top:1px solid var(--line2)">${btn("Se déconnecter", "logout", "", "", "o")}</div>`)}`);
 };
 const entPatch = async (patch) => {

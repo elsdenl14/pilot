@@ -5,6 +5,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const eur = (n) => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(n || 0));
 const dt = (s) => (s ? new Date(s).toLocaleDateString("fr-FR") : "");
 const token = new URLSearchParams(location.search).get("t") || "";
+const pvToken = new URLSearchParams(location.search).get("pv") || "";
 
 async function rpc(fn, args) {
   const r = await fetch(`${CFG.url}/rest/v1/rpc/${fn}`, {
@@ -180,4 +181,52 @@ async function show() {
     try { await rpc("partage_refuser", { p_token: token, p_motif: "" }); await show(); } catch (x) { er.textContent = x.message; f.querySelectorAll("button").forEach((b) => (b.disabled = false)); }
   };
 }
-show();
+/* ---------- Procès-verbal de réception : lecture et signature ---------- */
+async function showPv() {
+  if (!/^[0-9a-f-]{36}$/i.test(pvToken)) return fail("Ce lien n'est pas valide.");
+  if (!CFG.url || /VOTRE/.test(CFG.url)) return fail("Le site n'est pas configuré.");
+  let d;
+  try { d = await rpc("pv_get", { p_token: pvToken }); } catch (e) { return fail(e.message); }
+  if (!d) return fail("Ce document n'existe plus ou le lien est incorrect.");
+  const e = d.entreprise || {}, pdf = d.pdf_path ? `${CFG.url}/storage/v1/object/public/partages/${d.pdf_path.split("/").map(encodeURIComponent).join("/")}` : "";
+  const signed = !!d.signe_at, res = d.reserves || [];
+  root.innerHTML = `
+    <div class="card top"><div><p class="mut" style="margin:0">${esc(e.nom || "")}</p><h1>Procès-verbal de réception ${esc(d.numero || "")}</h1>
+      <p class="mut" style="margin:0">${esc((d.chantier || {}).nom || "")} · réception du ${dt(d.date_reception)}</p></div>
+      <div style="text-align:right"><span class="badge ${d.type === "Refusée" ? "dn" : d.type === "Sans réserve" ? "ok" : ""}">${d.type === "Sans réserve" ? "Sans réserve" : d.type === "Avec réserves" ? "Avec réserves" : "Réception refusée"}</span></div></div>
+    <div class="card">${signed ? `<p style="margin:0 0 12px"><span class="badge ok">Signé le ${dt(d.signe_at)} par ${esc(d.signataire_nom)}</span></p>` : ""}
+      ${res.length ? `<h2>Réserves</h2><ol style="margin:0 0 12px 18px;padding:0">${res.map((r) => `<li>${esc(r.description)}${r.localisation ? " <span class='mut'>(" + esc(r.localisation) + ")</span>" : ""}${r.levee ? " <span class='badge ok'>levée</span>" : ""}</li>`).join("")}</ol>${d.delai_levee ? `<p class="mut" style="margin:0 0 12px">À lever avant le ${dt(d.delai_levee)}.</p>` : ""}` : ""}
+      ${pdf ? `<iframe class="pdf" src="${esc(pdf)}" title="Procès-verbal"></iframe><p class="row" style="margin:12px 0 0"><a class="btn o" href="${esc(pdf)}" target="_blank" rel="noopener" download="${esc(d.numero || "pv")}.pdf">Télécharger le PDF</a></p>` : ""}</div>
+    ${!signed ? `<form class="card" id="rep"><h2>Signer le procès-verbal</h2><label>Votre nom<input name="nom" autocomplete="name" maxlength="120"></label>
+      <div class="sigbox"><div class="sigh"><span>Votre signature</span><button type="button" class="lk" id="sigclr">Effacer</button></div><canvas id="sig" width="720" height="240" aria-label="Zone de signature : dessinez avec le doigt ou la souris"></canvas><p class="mut sigtip">Dessinez votre signature dans le cadre.</p></div>
+      <label class="chk"><input type="checkbox" name="ok"> J'ai lu ce procès-verbal et je le signe. Cette signature électronique a valeur d'accord.</label>
+      <div class="row"><button class="btn" type="submit">Signer le procès-verbal</button></div>
+      <p class="mut" style="font-size:13px;margin:10px 0 0">${esc(e.nom || "L'entreprise")} est prévenue immédiatement. Sont conservés avec votre signature : la date et l'heure, et l'empreinte numérique du document consulté.</p><p class="er" role="alert"></p></form>` : ""}
+    <div class="card"><h2>Contact</h2><p class="mut" style="margin:0">${esc(e.nom || "")}${e.telephone ? " · " + esc(e.telephone) : ""}${e.email ? ` · <a href="mailto:${esc(e.email)}">${esc(e.email)}</a>` : ""}</p></div>`;
+  const f = document.getElementById("rep");
+  if (!f) return;
+  const er = f.querySelector(".er"), cv = f.querySelector("#sig"), cx = cv.getContext("2d");
+  let drawing = false, strokes = 0, last = null;
+  cx.lineWidth = 3.2; cx.lineCap = "round"; cx.lineJoin = "round"; cx.strokeStyle = "#0b1b3a";
+  const pos = (ev) => { const r = cv.getBoundingClientRect(); return { x: ((ev.clientX - r.left) / r.width) * cv.width, y: ((ev.clientY - r.top) / r.height) * cv.height }; };
+  cv.addEventListener("pointerdown", (ev) => { ev.preventDefault(); cv.setPointerCapture(ev.pointerId); drawing = true; last = pos(ev); cx.beginPath(); cx.arc(last.x, last.y, 1.6, 0, 7); cx.fillStyle = "#0b1b3a"; cx.fill(); });
+  cv.addEventListener("pointermove", (ev) => { if (!drawing) return; ev.preventDefault(); const p = pos(ev); cx.beginPath(); cx.moveTo(last.x, last.y); cx.lineTo(p.x, p.y); cx.stroke(); strokes += Math.hypot(p.x - last.x, p.y - last.y); last = p; });
+  const stop = () => { drawing = false; };
+  cv.addEventListener("pointerup", stop); cv.addEventListener("pointercancel", stop);
+  f.querySelector("#sigclr").onclick = () => { cx.clearRect(0, 0, cv.width, cv.height); strokes = 0; };
+  const sha256 = async (url) => { try { const buf = await (await fetch(url, { cache: "no-store" })).arrayBuffer(); return [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map((b) => b.toString(16).padStart(2, "0")).join(""); } catch (x) { return ""; } };
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    if (!f.nom.value.trim()) { er.textContent = "Indiquez votre nom pour signer."; return; }
+    if (strokes < 60) { er.textContent = "Dessinez votre signature dans le cadre."; return; }
+    if (!f.ok.checked) { er.textContent = "Cochez la case pour confirmer votre accord."; return; }
+    er.textContent = ""; f.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      const hash = pdf ? await sha256(pdf) : "";
+      await rpc("pv_signer", { p_token: pvToken, p_nom: f.nom.value.trim(), p_signature: cv.toDataURL("image/png"), p_hash: hash, p_ua: navigator.userAgent });
+      await showPv();
+    } catch (x) { er.textContent = x.message; f.querySelectorAll("button").forEach((b) => (b.disabled = false)); }
+  };
+}
+
+pvToken ? showPv() : show();

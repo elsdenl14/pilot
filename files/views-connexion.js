@@ -84,7 +84,7 @@ function cxNew(renewId) {
 async function cxHandleReturn() {
   const p = new URLSearchParams(location.search);
   const state = p.get("state"), code = p.get("code"), err = p.get("error");
-  if (!state || (!code && !err)) return;
+  if (!state || state.startsWith("gm:") || (!code && !err)) return;
   history.replaceState(null, "", location.pathname + "#/compta?tab=banque");
   if (!db.v7) return;
   if (err || !code) {

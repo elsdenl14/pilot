@@ -157,6 +157,7 @@ function rlSuggere(f) {
   return Math.min(3, Math.max(d > 45 ? 3 : d > 15 ? 2 : 1, last ? last + 1 : 1));
 }
 function rlText(f, n, o = {}) {
+  if (db.v10 && typeof mlRelance === "function") return mlRelance(f, n, o);
   const c = clientOf(f.client_id) || {}, e = db.ent, pro = c.type === "Professionnel", tj = today();
   const p = partageOf(f.id), link = o.lien && p ? shareLink(p.token) : "", rib = o.rib ? rgRibLine() : "";
   const retard = Math.max(0, daysBetween(f.echeance, tj)), last = rgLastRelance(f.id);
@@ -180,7 +181,7 @@ function rlOpen(fid) {
   const body = `<p class="mut" style="margin:0 0 12px">${esc(info)}</p><div class="frm">
     ${fld({ k: "niveau", l: "Niveau de relance", t: "select", o: [1, 2, 3].map((n) => ({ v: n, l: `${n} · ${RL_NIV[n]}` })), v: n0 })}
     ${fld({ k: "canal", l: "Canal", t: "select", o: ["Email", "SMS / WhatsApp", "Téléphone", "Courrier"], v: "Email" })}
-    <label class="fl"><span>Joindre</span><span style="display:flex;gap:14px;flex-wrap:wrap;padding:8px 0"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rl_lien" ${p ? "checked" : "disabled"}> le lien de paiement</label><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rl_rib" ${o0.rib ? "checked" : "disabled"}> mon RIB</label></span>${p ? "" : `<small>Envoyez d'abord la facture au client (« Envoyer au client ») pour pouvoir joindre le lien de paiement.</small>`}</label>
+    <label class="fl"><span>Joindre</span><span style="display:flex;gap:14px;flex-wrap:wrap;padding:8px 0"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rl_lien" ${p ? "checked" : "disabled"}> le lien de paiement</label><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rl_rib" ${o0.rib ? "checked" : "disabled"}> mon RIB</label>${typeof gmOn === "function" && gmOn() ? `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rl_pj" checked> la facture en PDF</label>` : ""}</span>${p ? "" : `<small>Envoyez d'abord la facture au client (« Envoyer au client ») pour pouvoir joindre le lien de paiement.</small>`}</label>
     ${fld({ k: "sujet", l: "Objet", v: t0.sujet, cls: "full" })}
     ${fld({ k: "corps", l: "Message", t: "textarea", v: t0.corps, cls: "full", rows: 13 })}
     <p class="mut full" id="rl_n3" style="margin:0" ${n0 === 3 ? "" : "hidden"}>Pour avoir une valeur probante, envoyez la mise en demeure par lettre recommandée avec accusé de réception (canal « Courrier »). Pilot enregistre la relance, il ne remplace pas un conseil juridique.</p></div>`;
@@ -199,7 +200,9 @@ function rlOpen(fid) {
       await q(sb.from("reglement_suivi").insert({ facture_id: fid, type: "Relance", niveau: Number(v.niveau), canal, date_op: today(), montant: f.reste, note: v.sujet }));
       api.close();
       await refresh();
-      if (canal === "Email") location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(v.sujet)}&body=${encodeURIComponent(v.corps)}`;
+      if (canal === "Email" && typeof gmOn === "function" && gmOn()) {
+        try { await mlSendRaw({ to: c.email, sujet: v.sujet, corps: v.corps, client_id: f.client_id, doc_type: "facture", doc_id: fid, pdf: $("#rl_pj", api.el)?.checked ? { nom: `${slug(f.numero)}.pdf`, bytes: () => docPdfBytes("facture", fid) } : null }); toast("Relance envoyée par Gmail.", "ok"); await refresh(); } catch (e) { toast("Relance enregistrée, mais l'envoi Gmail a échoué : " + esc(friendly(e)), "dn"); }
+      } else if (canal === "Email") location.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(v.sujet)}&body=${encodeURIComponent(v.corps)}`;
       else if (canal === "Téléphone") toast("Appel noté dans l'historique.", "ok");
       else { try { await navigator.clipboard.writeText(v.corps); toast("Message copié : collez-le dans votre messagerie ou votre courrier. Relance enregistrée.", "ok"); } catch (e) { toast("Relance enregistrée.", "ok"); } }
     },

@@ -373,6 +373,16 @@ const PilotPdf = (() => {
       for (const l of ls) { txt(l, ML, y - 2, { size: 8.5 }); y -= 11.5; }
       y -= 8;
     };
+    const mentionsBlock = () => {
+      const ms = data.mentions || [];
+      if (!ms.length) return;
+      const ls = ms.flatMap((m) => wrap(m.text, font, 7.5, W - 2 * ML));
+      need(ls.length * 10 + 20);
+      txt("MENTIONS LÉGALES", ML, y - 8, { size: 7, f: bold, color: A });
+      y -= 16;
+      for (const m of ms) for (const l of wrap(m.text, font, 7.5, W - 2 * ML)) { txt(l, ML, y - 2, { size: 7.5, color: GREY }); y -= 10; }
+      y -= 6;
+    };
     if (data.notes) para("Remarques", data.notes);
     if (kind === "facture" && fx?.nature === "Avoir") {
       para("Avoir", "Cet avoir vient en déduction des sommes dues sur la facture d'origine, ou fait l'objet d'un remboursement.");
@@ -399,8 +409,10 @@ const PilotPdf = (() => {
         for (const l of tl) { txt(l, ML + S + 4, ty, { size: 8.5, color: GREY }); ty -= 11.5; }
         y = y0 - S - 2;
       }
+      mentionsBlock();
     } else {
       para("Conditions", `Devis valable ${data.validite_jours || 30} jours à compter de sa date d'émission. Les travaux débuteront après réception du devis daté et signé.`);
+      mentionsBlock();
       need(104);
       const sy = y, bw = (W - 2 * ML - 20) / 2;
       [["Le client", "Date et signature, précédées de « Bon pour accord »"], ["L'entreprise", ent.nom || "Cachet et signature"]].forEach(([t, sub], i) => {
@@ -425,6 +437,7 @@ const PilotPdf = (() => {
         let fy = 44;
         for (const f of foot) for (const l of wrap(f, font, 7, W - 2 * ML).slice(0, 2)) { txt(l, W / 2 - font.widthOfTextAtSize(clean(l), 7) / 2, fy, { size: 7, color: GREY }); fy -= 9; }
       }
+      if (data.empreinte) txt(`Empreinte d'intégrité SHA-256 : ${data.empreinte.slice(0, 32)}`, ML, 24, { size: 6.5, color: GREY });
       if (pages.length > 1) txt(`Page ${i + 1} / ${pages.length}`, W - ML, bg ? 24 : 24, { size: 7.5, color: GREY, right: true });
     });
 

@@ -330,6 +330,8 @@ async function docPdfBytes(K, id) {
     paye: d.paye || 0, devis_numero: dv?.numero,
     qr: K === "facture" && d.statut !== "Brouillon" && typeof rgEpcMatrix === "function" ? rgEpcMatrix(d) : null,
     fx: K === "facture" && typeof fxPdfData === "function" ? fxPdfData(d) : null,
+    empreinte: K === "facture" && d.statut !== "Brouillon" && typeof cfEmpreinte === "function" ? await cfEmpreinte(d, lignes) : "",
+    mentions: typeof lgBuild === "function" ? lgBuild(K, d, c, ch, lignes) : [],
   };
   return PilotPdf.build(data, await pdfContext(K));
 }
@@ -370,6 +372,7 @@ async function docShare(K, id) {
 }
 function mailFor(K, d, link) {
   const c = clientOf(d.client_id) || {}, e = db.ent;
+  if (db.v10 && typeof mlRender === "function") { const t = mlRender(K === "devis" ? "devis_envoi" : "facture_envoi", { d, c, lien: link }); return `mailto:${encodeURIComponent(c.email || "")}?subject=${encodeURIComponent(t.sujet)}&body=${encodeURIComponent(t.corps)}`; }
   const sujet = K === "devis" ? `Devis ${d.numero} - ${e.nom || ""}` : `Facture ${d.numero} - ${e.nom || ""}`;
   const corps = K === "devis"
     ? `Bonjour,\n\nVeuillez trouver votre devis ${d.numero} d'un montant de ${E2(d.montant_ttc)} TTC.\nVous pouvez le consulter, l'accepter ou le refuser en ligne : ${link}\n\nCordialement,\n${e.nom || ""}`
@@ -383,11 +386,12 @@ function showShare(K, id, token) {
       <div class="lnk-in"><input type="text" readonly value="${esc(link)}" id="shl"><button type="button" class="btn o" id="cpl">Copier le lien</button></div>
       ${c.email ? "" : `<p class="badge-warn" style="margin:0">Ce client n'a pas d'adresse email : ajoutez-la dans sa fiche pour préremplir le message.</p>`}
     </div>
-    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><a class="btn o" href="${esc(link)}" target="_blank" rel="noopener">Voir la page client</a><a class="btn" href="${mailFor(K, d, link)}">Écrire l'email</a></div>`, { submit: false, noFocus: true });
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><a class="btn o" href="${esc(link)}" target="_blank" rel="noopener">Voir la page client</a>${db.v10 ? btn(gmOn() ? "Envoyer avec Gmail" : "Écrire l'email", "mlSendDocAct", id, K + ":" + token) : `<a class="btn" href="${mailFor(K, d, link)}">Écrire l'email</a>`}</div>`, { submit: false, noFocus: true });
   $("#cpl", api.el).onclick = async () => { try { await navigator.clipboard.writeText(link); toast("Lien copié.", "ok"); } catch (e) { $("#shl", api.el).select(); } };
 }
 async function docRelance(K, id) {
   const k = KD[K], d = byId(db[k.list], id), c = clientOf(d.client_id) || {}, p = partageOf(id), e = db.ent;
+  if (db.v10 && typeof mlCompose === "function") return mlCompose({ titre: `Relance ${esc(d.numero)}`, to: c.email || "", ...mlRender(K === "devis" ? "devis_relance" : "relance_1", { d, c, lien: p ? shareLink(p.token) : "" }), client_id: d.client_id, doc_type: K, doc_id: id, pdf: { nom: `${slug(d.numero)}.pdf`, bytes: () => docPdfBytes(K, id) } });
   if (!c.email) return toast("Ajoutez l'adresse email du client dans sa fiche pour préparer la relance.", "dn");
   const link = p ? shareLink(p.token) : "";
   const sujet = K === "devis" ? `Relance : devis ${d.numero}` : `Relance : facture ${d.numero}`;
