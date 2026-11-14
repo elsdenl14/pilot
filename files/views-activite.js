@@ -60,6 +60,10 @@ function priorites() {
   }
   if (typeof rgPriorites === "function") rgPriorites(add, t);
   if (typeof ntPriorites === "function") ntPriorites(add, t);
+  if (typeof bcPriorites === "function") bcPriorites(add, t);
+  if (typeof urssafPriorites === "function") urssafPriorites(add, t);
+  if (typeof planPriorites === "function") planPriorites(add, t);
+  if (typeof ressPriorites === "function") ressPriorites(add, t);
   for (const f of ouvertes()) {
     const d = daysBetween(t, f.echeance);
     if (d >= 0 && d <= 7)
@@ -247,6 +251,8 @@ function chantierDetail(id) {
       ${card("Dépenses et achats", tbl(["Fournisseur", "Date", { h: "HT", r: 1 }, "Statut"], deps.map((d) => ({ go: `depenses/${d.id}`, c: [`<strong>${esc(d.fournisseur)}</strong><small>${esc(d.categorie || d.type)}</small>`, D(d.date_depense), `<span class="num">${E2(d.montant_ht)}</span>`, chip(d.statut)] })), "Aucune dépense rattachée à ce chantier."), btn("Ajouter", "depNew", "", "chantier:" + id, "o sm w"))}
       ${achatsCard(c)}
     </div><div>
+      ${typeof chPlanCard === "function" ? chPlanCard(id) : ""}
+      ${typeof chRentaCard === "function" ? chRentaCard(id) : ""}
       ${typeof pvChantierCard === "function" ? pvChantierCard(id) : ""}
       ${typeof ntCard === "function" ? ntCard("chantier", id) : ""}
       ${dcCard("chantier", id)}

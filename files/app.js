@@ -111,6 +111,15 @@ const ACT = {
   ...(typeof mailActions !== "undefined" ? mailActions : {}),
   ...(typeof noteActions !== "undefined" ? noteActions : {}),
   ...(typeof pvActions !== "undefined" ? pvActions : {}),
+  ...(typeof catalogueActions !== "undefined" ? catalogueActions : {}),
+  ...(typeof bcActions !== "undefined" ? bcActions : {}),
+  ...(typeof achatsProActions !== "undefined" ? achatsProActions : {}),
+  ...(typeof efbatchActions !== "undefined" ? efbatchActions : {}),
+  ...(typeof urssafActions !== "undefined" ? urssafActions : {}),
+  ...(typeof planningActions !== "undefined" ? planningActions : {}),
+  ...(typeof ressourcesActions !== "undefined" ? ressourcesActions : {}),
+  ...(typeof tempsActions !== "undefined" ? tempsActions : {}),
+  ...(typeof pilotageActions !== "undefined" ? pilotageActions : {}),
   tab: (id, arg) => { ST.tab[id] = arg; return render(true); },
   period: (id, arg) => { ST.period = arg; return render(true); },
   gran: (id, arg) => { ST.gran = arg; return render(true); },
@@ -248,6 +257,7 @@ document.addEventListener("submit", (e) => {
 });
 document.addEventListener("change", (e) => {
   const t = e.target;
+  if (t.dataset?.chg && ACT[t.dataset.chg]) return run(() => ACT[t.dataset.chg](t.value, "", t));
   if (t.id === "couleur") return run(async () => { if (!guard()) return; await saveRegl((r) => { r.couleur = t.value; }); toast("Couleur enregistrée.", "ok"); });
   if (t.dataset?.marge) {
     const [K, side] = t.dataset.marge.split(":");

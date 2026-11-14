@@ -29,7 +29,7 @@ const emptyDb = () => ({
   efact: [], sigs: [], connexions: [], cx: {}, nbOuvrages: 0, v7: false,
   fd: {}, v8: false,
   rg: { ribs: [], cribs: [], cheques: [], remises: [], credits: [], suivi: [], liens: [] }, v9: false,
-  cf: { journal: [], clotures: [] }, ml: { modeles: [], gmail: null, mails: [] }, nt: [], pv: { list: [], reserves: [] }, v10: false,
+  cf: { journal: [], clotures: [] }, ml: { modeles: [], gmail: null, mails: [] }, nt: [], pv: { list: [], reserves: [] }, v10: false, v11: false, v12: false, v12err: "", taches: [], evts: [], phases: [], sts: [], stm: [], mat: [], matA: [], matE: [], tps: [], obj: [], chg: [], cat: [], catPrix: [], bcs: [], bcl: [], bcr: [], lots: [], urs: [],
 });
 let db = emptyDb();
 
@@ -111,6 +111,8 @@ async function load() {
   // v8 : facturation BTP (acomptes, situations, avoirs…), facultatif tant que migration_v8.sql n'est pas lancée
   try { await loadV8(); db.v8 = true; db.v8err = ""; } catch (e) { db.fd = {}; db.v8 = false; db.v8err = e?.message || String(e); }
   // v9 : règlements clients (RIB, chèques, crédits, relances), facultatif tant que migration_v9.sql n'est pas lancée
+  try { if (typeof loadV11 === "function") await loadV11(); } catch (e) { db.v11 = false; console.warn(e); }
+  try { if (typeof loadV12 === "function") await loadV12(); } catch (e) { db.v12 = false; console.warn(e); }
   try { if (typeof loadV10 === "function") await loadV10(); } catch (e) { db.v10 = false; console.warn(e); }
   try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }
 }
@@ -144,6 +146,14 @@ const ic = {
   paiements: "M3 6h18v12H3z M3 10h18 M7 15h3",
   compta: "M5 3h14v18H5z M8 7h8 M8 11h3 M13 11h3 M8 15h3 M13 15h3",
   fournisseurs: "M3 7l9-4 9 4v13H3z M9 20v-6h6v6",
+  planning: "M4 5h16v15H4z M4 10h16 M9 3v4 M15 3v4",
+  temps: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 7v5l3 2",
+  soustraitants: "M16 11a3 3 0 100-6 3 3 0 000 6z M8 12a3 3 0 100-6 3 3 0 000 6z M2 20c0-3 3-5 6-5s6 2 6 5 M14 15c3 0 8 1 8 5",
+  materiel: "M14 6l4 4-9 9H5v-4z M13 7l4 4",
+  rentabilite: "M4 19V9 M10 19V5 M16 19v-7 M22 19H2",
+  objectifs: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 16a4 4 0 100-8 4 4 0 000 8z M12 12h.01",
+  tresorerie: "M3 17l6-6 4 4 8-8 M15 7h6v6",
+  achats: "M3 4h2l2.5 11h10L20 7H6 M9 20a1 1 0 100-2 1 1 0 000 2z M17 20a1 1 0 100-2 1 1 0 000 2z",
   analyses: "M4 20v-9 M10 20V4 M16 20v-7 M22 20H2",
   params: "M4 7h10 M18 7h2 M4 17h2 M10 17h10 M14 5v4 M6 15v4",
   bell: "M6 16v-5a6 6 0 0112 0v5l2 2H4z M10 21h4",
@@ -163,7 +173,12 @@ const svg = (p, c = "") =>
 const NAV = [
   ["home", "Accueil", null],
   ["chantiers", "Chantiers", "Activité"],
+  ["planning", "Planning", null],
+  ["temps", "Temps passés", null],
+  ["soustraitants", "Sous-traitants", null],
+  ["materiel", "Matériel", null],
   ["clients", "Clients", null],
+  ["achats", "Achats", null],
   ["fournisseurs", "Fournisseurs", null],
   ["devis", "Devis", null],
   ["factures", "Factures", null],
@@ -176,6 +191,9 @@ const NAV = [
   ["paiements", "Paiements", "Finances"],
   ["compta", "Comptabilité", null],
   ["analyses", "Analyses", "Pilotage"],
+  ["rentabilite", "Rentabilité", null],
+  ["objectifs", "Objectifs", null],
+  ["tresorerie", "Trésorerie prévue", null],
 ];
 
 /* ===================== Routage (#/page/id) ===================== */
@@ -198,7 +216,7 @@ async function render(keepScroll = false) {
   const my = ++rid;
   const r = parseHash();
   if (!V[r.name]) r.name = "home";
-  $$(".nav").forEach((n) => n.setAttribute("aria-current", n.dataset.go === r.name ? "page" : "false"));
+  $$(".nav").forEach((n) => n.setAttribute("aria-current", n.dataset.go === (r.name === "bc" ? "achats" : r.name) ? "page" : "false"));
   ST.editing = false;
   let out;
   try {
@@ -293,7 +311,7 @@ function modal(title, body, opts = {}) {
   const m = document.createElement("div");
   m.className = "md";
   m.innerHTML = `<form class="mc${opts.wide ? " wide" : ""}" novalidate><div class="mh"><h2>${title}</h2><button type="button" class="ib" data-x aria-label="Fermer">${svg(ic.x)}</button></div><div class="mb">${body}</div><p class="er" role="alert"></p>${
-    opts.submit === false ? "" : `<div class="fa"><button type="button" class="btn o" data-x>${opts.cancel || "Annuler"}</button><button class="btn" type="submit">${opts.submit || "Enregistrer"}</button></div>`
+    opts.submit === false ? "" : `<div class="fa">${opts.extra ? `<span style="margin-right:auto">${opts.extra}</span>` : ""}<button type="button" class="btn o" data-x>${opts.cancel || "Annuler"}</button><button class="btn" type="submit">${opts.submit || "Enregistrer"}</button></div>`
   }</form>`;
   document.body.appendChild(m);
   const form = $("form", m);
