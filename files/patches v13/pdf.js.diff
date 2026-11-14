@@ -1,0 +1,80 @@
+--- main/pilot-main/files/pdf.js	2026-11-10 15:41:14.000000000 +0000
++++ out/pdf.js	2026-11-14 12:41:15.398640161 +0000
+@@ -214,20 +214,26 @@
+     const WHITE = rgb(1, 1, 1), ZEBRA = rgb(0.975, 0.978, 0.982);
+     const lignes = data.lignes?.length ? data.lignes : data.ht > 0 ? [{ designation: "Prestation", quantite: 1, unite: "forfait", prix_unitaire_ht: data.ht, taux_tva: data.taux_tva ?? 20 }] : [];
+     const lht = (l) => r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
++    const inc = (l) => l.type_ligne !== "image" && (!l.est_option || l.option_choisie);
+     const byRate = {};
+-    for (const l of lignes) {
++    for (const l of lignes.filter(inc)) {
+       const ht = lht(l), k = String(Number(l.taux_tva));
+       byRate[k] ||= { ht: 0, tva: 0 };
+       byRate[k].ht += ht;
+       byRate[k].tva += r2((ht * Number(l.taux_tva)) / 100);
+     }
+     const dedLines = lignes.filter((l) => l.nature === "deduction");
++    const optsOff = lignes.filter((l) => l.est_option && !l.option_choisie && l.type_ligne !== "image");
++    const emb = {};
++    for (const [p, b] of Object.entries(ctx.images || {})) {
++      try { const t = sniff(b); emb[p] = t === "png" ? await pdf.embedPng(b) : await pdf.embedJpg(b); } catch (e) { /* image ignorée */ }
++    }
+     const groups = [];
+-    for (const l of lignes.filter((l) => l.nature !== "deduction")) {
++    for (const l of lignes.filter((l) => l.nature !== "deduction" && (l.type_ligne === "image" ? emb[l.image_path] : inc(l)))) {
+       const cat = String(l.categorie || "").trim(), g = groups[groups.length - 1];
+       if (g && g.cat === cat) g.items.push(l); else groups.push({ cat, items: [l] });
+     }
+-    groups.forEach((g) => (g.sum = r2(sum(g.items, lht))));
++    groups.forEach((g) => (g.sum = r2(sum(g.items.filter((l) => l.type_ligne !== "image"), lht))));
+     // Situation : récapitulatif de l'avancement du marché
+     if (fx?.avancement?.length) {
+       need(60 + fx.avancement.length * 16);
+@@ -280,13 +286,22 @@
+     groups.forEach((g, gi) => {
+       if (g.cat) { if (y - 80 < botM) { newPage(); header(); } band(g, gi, false); }
+       g.items.forEach((l, li) => {
++        if (l.type_ligne === "image") {
++          const im = emb[l.image_path], cap = l.designation && l.designation !== "Image" ? String(l.designation) : "";
++          const sc = Math.min(300 / im.width, 190 / im.height, 1), dw = im.width * sc, dh = im.height * sc, rh = dh + (cap ? 15 : 0) + 12;
++          if (y - rh < botM) { newPage(); header(); if (g.cat) band(g, gi, true); }
++          page.drawImage(im, { x: designX, y: y - dh - 4, width: dw, height: dh });
++          if (cap) txt(fit(cap, 8.5, W - 2 * ML - 60), designX, y - dh - 15, { size: 8.5, color: GREY });
++          y -= rh;
++          return;
++        }
+         const ht = lht(l), libre = l.nature === "libre";
+-        const lines = wrap(l.designation, font, 9.5, designW);
++        const lines = wrap(l.designation + (l.est_option ? " (option retenue)" : ""), font, 9.5, designW);
+         const dl = l.description ? String(l.description).split("\n").flatMap((p) => wrap(p, font, 8.5, designW)) : [];
+         const rh = lines.length * 12.5 + dl.length * 11 + 11;
+         if (y - rh < botM) { newPage(); header(); if (g.cat) band(g, gi, true); }
+         if (li % 2 === 1) page.drawRectangle({ x: ML, y: y - rh + 2, width: W - 2 * ML, height: rh, color: ZEBRA });
+-        txt(`${gi + 1}.${li + 1}`, X.n, y - 11, { size: 8.5, color: GREY });
++        txt(`${gi + 1}.${g.items.slice(0, li).filter((x) => x.type_ligne !== "image").length + 1}`, X.n, y - 11, { size: 8.5, color: GREY });
+         lines.forEach((ll, i) => txt(ll, designX, y - 11 - i * 12.5, { size: 9.5 }));
+         dl.forEach((ll, i) => txt(ll, designX, y - 11 - lines.length * 12.5 - i * 11, { size: 8.5, color: GREY }));
+         const q = Number(l.quantite);
+@@ -306,6 +321,22 @@
+     });
+     y -= 8;
+ 
++    // ---- Options proposées, non comprises dans le total ----
++    if (optsOff.length) {
++      need(40 + optsOff.length * 17);
++      txt("OPTIONS PROPOSÉES  -  NON COMPRISES DANS LE TOTAL", ML, y - 8, { size: 8, f: bold, color: A });
++      y -= 22;
++      optsOff.forEach((l) => {
++        need(20);
++        txt(fit(l.designation + (l.option_groupe ? "  (" + l.option_groupe + ")" : ""), 9.5, 330), ML + 6, y - 8, { size: 9.5 });
++        txt(`${fmtNum(l.quantite, Number.isInteger(Number(l.quantite)) ? 0 : 2)} ${l.unite || ""}`, X.unite + 30, y - 8, { size: 9, color: GREY, right: true });
++        txt("+ " + money(lht(l)) + " HT", X.tot, y - 8, { size: 9.5, f: bold, right: true });
++        y -= 16;
++        page.drawLine({ start: { x: ML, y: y + 3 }, end: { x: W - ML, y: y + 3 }, thickness: 0.4, color: LINE });
++      });
++      y -= 10;
++    }
++
+     // ---- Totaux ----
+     const rates = Object.keys(byRate).sort((a, b) => b - a);
+     const dedHt = r2(sum(dedLines, lht));

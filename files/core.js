@@ -113,6 +113,7 @@ async function load() {
   // v9 : règlements clients (RIB, chèques, crédits, relances), facultatif tant que migration_v9.sql n'est pas lancée
   try { if (typeof loadV11 === "function") await loadV11(); } catch (e) { db.v11 = false; console.warn(e); }
   try { if (typeof loadV12 === "function") await loadV12(); } catch (e) { db.v12 = false; console.warn(e); }
+  try { if (typeof loadV13 === "function") await loadV13(); } catch (e) { db.v13 = false; console.warn(e); }
   try { if (typeof loadV10 === "function") await loadV10(); } catch (e) { db.v10 = false; console.warn(e); }
   try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }
 }

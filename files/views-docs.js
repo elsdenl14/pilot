@@ -9,6 +9,7 @@ const docStatut = (d, K) => (K === "facture" ? d.statut_affiche : d.statut);
 const UNITES = ["u", "m²", "ml", "m³", "h", "jour", "forfait", "kg", "lot"];
 const TVA_TAUX = [20, 10, 5.5, 0];
 
+let cxCurK = ""; // "devis" quand le chiffrage avancé (migration v13) est actif dans l'éditeur
 async function lignesOf(K, id) {
   const k = KD[K];
   const l = await q(sb.from(k.lt).select("*").eq(k.fk, id).order("position"));
@@ -18,6 +19,7 @@ async function lignesOf(K, id) {
 function totauxParTaux(lignes, d) {
   const by = {};
   for (const l of lignes) {
+    if (l.type_ligne === "image" || (l.est_option && !l.option_choisie)) continue;
     const ht = r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
     const k = String(Number(l.taux_tva));
     by[k] ||= { ht: 0, tva: 0 };
@@ -68,11 +70,12 @@ V.factures = (r) => docList("facture", r);
 /* ---------- Fiche d'un document ---------- */
 function docPreview(K, d, lignes) {
   const e = db.ent, c = clientOf(d.client_id) || {}, k = KD[K];
+  if (typeof cxPreviewLignes === "function") lignes = cxPreviewLignes(lignes);
   const by = totauxParTaux(lignes, d);
   const rates = Object.keys(by).sort((a, b) => b - a);
   const lht = (l) => r2(l.quantite * l.prix_unitaire_ht);
   const gs = lignes.length ? groupCats(lignes) : [];
-  gs.forEach((g) => (g.sum = r2(sum(g.lignes, lht))));
+  gs.forEach((g) => (g.sum = r2(sum(g.lignes.filter((l) => !(l.est_option && !l.option_choisie)), lht))));
   const recap = gs.filter((g) => g.cat).length >= 2 ? `<div class="doc-recap"><b>Récapitulatif des travaux</b>${gs.map((g, i) => `<div><span>${i + 1}. ${esc(g.cat || "Divers")}</span><span class="num">${E2(g.sum)}</span></div>`).join("")}</div>` : "";
   const fd = K === "facture" ? fdOf(d.id) : null, isDed = (l) => l.nature === "deduction", isLibre = (l) => l.nature === "libre";
   const ded = lignes.filter(isDed);
@@ -121,6 +124,7 @@ async function docDetail(K, id) {
     if (d.statut === "Brouillon") actions += btn("Modifier", "devisEdit", id, "", "o w");
     if (d.statut === "Envoyé") actions += btn("Marquer accepté", "devisStatut", id, "Accepté", "o w") + btn("Refusé", "devisStatut", id, "Refusé", "o w");
     actions += btn("Dupliquer", "devisDup", id, "", "o w");
+    if (db.v13 && d.statut === "Accepté") actions += btn("Avenant", "cxAvenant", id, "", "o w");
     if (d.statut === "Brouillon") actions += btn("Supprimer", "devisDel", id, "", "dn-o w");
   } else {
     if (d.statut === "Brouillon") actions += btn("Émettre la facture", "factureEmettre", id, "", "w") + btn("Modifier", "factureEdit", id, "", "o w") + btn("Supprimer", "factureDel", id, "", "dn-o w");
@@ -139,6 +143,7 @@ async function docDetail(K, id) {
     ${d.chantier_nom ? `<dt>Chantier</dt><dd><a href="#/chantiers/${d.chantier_id}">${esc(d.chantier_nom)}</a></dd>` : ""}
     <dt>${K === "devis" ? "Date" : "Émission"}</dt><dd>${D(d[k.df])}</dd>
     ${K === "facture" ? `<dt>Échéance</dt><dd>${D(d.echeance)}</dd>` : `<dt>Validité</dt><dd>${d.validite_jours} jours</dd>`}
+    ${K === "devis" && db.v13 ? cxDetailMarge(lignes) : ""}
     ${dv ? `<dt>Devis d'origine</dt><dd><a href="#/devis/${dv.id}">${esc(dv.numero)}</a></dd>` : ""}
     ${K === "facture" && db.v7 && d.statut !== "Brouillon" ? `<dt>Facture électronique</dt><dd>${efChip(efOf(id))}</dd>` : ""}</dl>`;
   const partageHtml = p
@@ -157,9 +162,10 @@ async function docDetail(K, id) {
 
 /* ---------- Éditeur (devis / facture) : catégories > lignes (+ description) ---------- */
 function ligneRow(l = {}) {
+  if (cxCurK === "devis" && l.type_ligne === "image") return cxImageRow(l);
   const tva = l.taux_tva ?? (Number(db.ent.taux_tva_defaut) || 20);
   const nat = l.nature || "normale";
-  return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}" data-tp="${l._tp ?? ""}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Poste libre : libellé (ex : frais de déplacement, remise commerciale)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea></td>
+  return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}" data-tp="${l._tp ?? ""}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Poste libre : libellé (ex : frais de déplacement, remise commerciale)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea>${cxCurK === "devis" ? cxPanel(l) : ""}</td>
     <td style="width:78px"><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}"></td>
     <td style="width:86px"><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}"></td>
     <td style="width:104px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
@@ -184,6 +190,7 @@ function readLignes(root) {
   $$(".cat", root).forEach((sec) => {
     const categorie = $('[data-f="cat"]', sec).value.trim();
     $$(".lr", sec).forEach((tr) => out.push({
+      ...(cxCurK === "devis" ? (cxApplyMetre(tr), cxRead(tr)) : {}),
       categorie, nature: tr.dataset.nat || "normale", ref_facture_id: tr.dataset.ref || null, designation: $('[data-f="des"]', tr).value.trim(), description: $('[data-f="desc"]', tr).value.trim(),
       quantite: parseNum($('[data-f="qte"]', tr).value), unite: $('[data-f="uni"]', tr).value.trim() || "u",
       prix_unitaire_ht: parseNum($('[data-f="pu"]', tr).value), taux_tva: Number($('[data-f="tva"]', tr).value),
@@ -213,30 +220,33 @@ function ovInsertLine(m, o) {
   sel.value = t;
   tr.dataset.tp = o.temps_pose_h || "";
   recalcLignes(m);
+  if (cxCurK === "devis") cxFillFromOuvrage(m, tr, o);
 }
 function recalcLignes(root) {
   const ls = readLignes(root);
   let i = 0;
   $$(".cat", root).forEach((sec) => {
     let s = 0;
-    $$(".lr", sec).forEach((tr) => { const l = ls[i++], t = r2(l.quantite * l.prix_unitaire_ht); s += t; $('[data-f="tot"]', tr).textContent = fmtNum(t); });
+    $$(".lr", sec).forEach((tr) => { const l = ls[i++], t = r2(l.quantite * l.prix_unitaire_ht); if (cxIncluded(l)) s += t; $('[data-f="tot"]', tr).textContent = fmtNum(t); });
     $('[data-f="sub"]', sec).textContent = "Sous-total " + E2(s);
   });
-  const by = totauxParTaux(ls.filter((l) => l.designation || l.prix_unitaire_ht));
+  const by = totauxParTaux(ls.filter((l) => (l.designation || l.prix_unitaire_ht) && cxIncluded(l)));
   const tp = sum($$(".lr", root), (tr) => (Number(tr.dataset.tp) || 0) * parseNum($('[data-f="qte"]', tr).value));
   const ht = sum(Object.values(by), (x) => x.ht), tva = sum(Object.values(by), (x) => x.tva);
   $("#totbox", root).innerHTML = `<div><span>Total HT</span><span class="num">${E2(ht)}</span></div>${Object.keys(by).sort((a, b) => b - a).map((t) => `<div><span>TVA ${String(t).replace(".", ",")} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}<div class="ttc"><span>Total TTC</span><span class="num">${E2(ht + tva)}</span></div>${tp > 0 ? `<div title="Information interne, non imprimée sur le document"><span>Temps de pose estimé</span><span class="num">${fmtNum(tp, 1)} h</span></div>` : ""}`;
+  if (cxCurK === "devis") cxAfterRecalc(root, ls);
 }
 // Les colonnes categorie / description sont écrites après l'enregistrement (par position)
 async function saveCats(K, id, ls) {
   const k = KD[K];
   const rows = await q(sb.from(k.lt).select("id").eq(k.fk, id).order("position"));
-  const ext = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : {});
+  const ext = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : K === "devis" && db.v13 ? cxExt(l) : {});
   await Promise.all(rows.map((r, i) => (ls[i] ? q(sb.from(k.lt).update({ categorie: ls[i].categorie || null, description: ls[i].description || null, ...ext(ls[i]) }).eq("id", r.id)) : null)));
 }
 async function copyCats(did, fid) {
   try {
-    const a = await q(sb.from("devis_lignes").select("categorie,description").eq("devis_id", did).order("position"));
+    let a = await q(sb.from("devis_lignes").select(db.v13 ? "categorie,description,type_ligne,est_option,option_choisie" : "categorie,description").eq("devis_id", did).order("position"));
+    if (db.v13) a = a.filter((x) => x.type_ligne !== "image" && (!x.est_option || x.option_choisie));
     const b = await q(sb.from("factures_lignes").select("id").eq("facture_id", fid).order("position"));
     await Promise.all(b.map((r, i) => (a[i] ? q(sb.from("factures_lignes").update({ categorie: a[i].categorie, description: a[i].description }).eq("id", r.id)) : null)));
   } catch (e) { console.warn("Catégories non copiées", e); }
@@ -245,6 +255,7 @@ async function copyCats(did, fid) {
 async function docForm(K, d, opts = {}) {
   if (!guard()) return;
   const k = KD[K];
+  cxCurK = K === "devis" && db.v13 ? "devis" : "";
   const lignes = d ? await lignesOf(K, d.id) : opts.lignes || [];
   let preClient = opts.client || d?.client_id || "";
   if (opts.chantier) preClient = byId(db.chantiers, opts.chantier)?.client_id || preClient;
@@ -255,8 +266,8 @@ async function docForm(K, d, opts = {}) {
     ${fld({ k: "date", l: K === "devis" ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
     ${K === "devis" ? fld({ k: "validite_jours", l: "Validité (jours)", t: "number", v: d?.validite_jours || 30 }) : fld({ k: "echeance", l: "Échéance de paiement", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}
     <div class="full"><div id="cats">${groupCats(lignes).map(catBlock).join("")}</div>
-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap"><span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addc">+ Ajouter une catégorie</button><button type="button" class="btn o sm" id="addov">Ajouter depuis la bibliothèque</button>${K === "facture" ? `<button type="button" class="btn o sm" id="addlibre">+ Poste libre</button>` : ""}</span><div class="totbox" id="totbox"></div></div></div>
-    ${fld({ k: "notes", l: "Remarques (apparaissent sur le document)", t: "textarea", v: d?.notes || "", r: 0, cls: "full" })}
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap"><span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addc">+ Ajouter une catégorie</button><button type="button" class="btn o sm" id="addov">Ajouter depuis la bibliothèque</button>${K === "facture" ? `<button type="button" class="btn o sm" id="addlibre">+ Poste libre</button>` : ""}${cxCurK === "devis" ? cxToolbar(K) : ""}</span><div class="totbox" id="totbox"></div></div></div>
+    ${fld({ k: "notes", l: "Remarques (apparaissent sur le document)", t: "textarea", v: d?.notes || opts.notes || "", r: 0, cls: "full" })}
     ${K === "facture" && db.v8 && fxNat(d || {}) !== "Avoir" ? fxAdjFields(d ? fdOf(d.id) : {}) : ""}
   </div>`;
   modal(d ? `Modifier ${esc(docNum(d, K))}` : `Nouveau ${k.label.toLowerCase()}`, body, {
@@ -278,10 +289,11 @@ async function docForm(K, d, opts = {}) {
         recalcLignes(m);
       });
       recalcLignes(m);
+      if (cxCurK === "devis") { cxEditorMount(m, K); if (opts.dictee) setTimeout(() => cxDictee(m), 80); }
     },
     onSubmit: async (v, api) => {
-      const ls = readLignes(api.el).filter((l) => l.designation || l.prix_unitaire_ht);
-      if (!ls.length) throw new Error("Ajoutez au moins une ligne avec une désignation et un prix.");
+      const ls = readLignes(api.el).filter((l) => l.designation || l.prix_unitaire_ht || l.type_ligne === "image");
+      if (!ls.some((l) => l.type_ligne !== "image")) throw new Error("Ajoutez au moins une ligne avec une désignation et un prix.");
       const cid = await resolveClient(v);
       const payload = { id: d?.id || null, client_id: cid, chantier_id: v.chantier_id || null, date: v.date, notes: v.notes || null, lignes: ls,
         ...(K === "devis" ? { validite_jours: parseInt(v.validite_jours) || 30 } : { echeance: v.echeance }) };
@@ -333,7 +345,9 @@ async function docPdfBytes(K, id) {
     empreinte: K === "facture" && d.statut !== "Brouillon" && typeof cfEmpreinte === "function" ? await cfEmpreinte(d, lignes) : "",
     mentions: typeof lgBuild === "function" ? lgBuild(K, d, c, ch, lignes) : [],
   };
-  return PilotPdf.build(data, await pdfContext(K));
+  const pctx = await pdfContext(K);
+  if (typeof cxPdfImages === "function") pctx.images = await cxPdfImages(lignes);
+  return PilotPdf.build(data, pctx);
 }
 function openPdfModal(title, bytes, filename) {
   const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));

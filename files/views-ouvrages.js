@@ -32,7 +32,7 @@ const ovRow = (o, withAct = true) => ({
   c: [`<strong>${esc(o.designation)}</strong><small>${esc(o.corps_etat)}${o.code ? " · " + esc(o.code) : ""}</small>`, esc(o.unite),
     `<span class="num">${E2(o.prix_ht)}</span>`, `<span class="num">${ovH(o.temps_pose_h)}</span>`,
     o.part_mo ? `<span class="num">${Math.round(o.part_mo)} %</span>` : "-", `<span class="mut">${esc(o.source || "")}</span>`,
-    withAct ? `<span class="r"><button class="lk w" data-act="ovEdit" data-id="${o.id}">Modifier</button></span>` : ""],
+    withAct ? `<span class="r">${db.v13 ? `<button class="lk w" data-act="cxComp" data-id="${o.id}">Sous-détail</button> · ` : ""}<button class="lk w" data-act="ovEdit" data-id="${o.id}">Modifier</button></span>` : ""],
 });
 const OV_COLS = ["Ouvrage", "Unité", { h: "Prix HT", r: 1 }, { h: "Temps de pose", r: 1 }, { h: "Part MO", r: 1 }, "Source", ""];
 

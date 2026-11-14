@@ -1,0 +1,10 @@
+--- v12/index.html	2026-11-13 21:51:12.000000000 +0000
++++ out/index.html	2026-11-14 12:41:24.614173441 +0000
+@@ -64,6 +64,7 @@
+     <script src="views-ressources.js"></script>
+     <script src="views-temps.js"></script>
+     <script src="views-pilotage.js"></script>
++    <script src="views-chiffrage.js"></script>
+     <script src="app.js"></script>
+   </body>
+ </html>

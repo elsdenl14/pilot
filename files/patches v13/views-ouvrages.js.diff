@@ -1,0 +1,11 @@
+--- main/pilot-main/files/views-ouvrages.js	2026-11-10 15:41:14.000000000 +0000
++++ out/views-ouvrages.js	2026-11-14 12:41:15.397918576 +0000
+@@ -32,7 +32,7 @@
+   c: [`<strong>${esc(o.designation)}</strong><small>${esc(o.corps_etat)}${o.code ? " · " + esc(o.code) : ""}</small>`, esc(o.unite),
+     `<span class="num">${E2(o.prix_ht)}</span>`, `<span class="num">${ovH(o.temps_pose_h)}</span>`,
+     o.part_mo ? `<span class="num">${Math.round(o.part_mo)} %</span>` : "-", `<span class="mut">${esc(o.source || "")}</span>`,
+-    withAct ? `<span class="r"><button class="lk w" data-act="ovEdit" data-id="${o.id}">Modifier</button></span>` : ""],
++    withAct ? `<span class="r">${db.v13 ? `<button class="lk w" data-act="cxComp" data-id="${o.id}">Sous-détail</button> · ` : ""}<button class="lk w" data-act="ovEdit" data-id="${o.id}">Modifier</button></span>` : ""],
+ });
+ const OV_COLS = ["Ouvrage", "Unité", { h: "Prix HT", r: 1 }, { h: "Temps de pose", r: 1 }, { h: "Part MO", r: 1 }, "Source", ""];
+ 

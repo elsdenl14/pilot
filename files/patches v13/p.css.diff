@@ -1,0 +1,10 @@
+--- main/pilot-main/files/p.css	2026-11-10 15:41:14.000000000 +0000
++++ out/p.css	2026-11-14 12:41:15.398724948 +0000
+@@ -32,3 +32,7 @@
+ .payopt{border-top:1px solid var(--line);padding:14px 0 4px;margin-top:10px}.payopt:first-of-type{border-top:0;margin-top:0;padding-top:0}
+ .ribrow{display:flex;gap:18px;flex-wrap:wrap;align-items:center;justify-content:space-between}.ribrow dl{flex:1;min-width:240px}
+ .qrbox{text-align:center}.qrbox small{display:block}
++
++.optg{border:1px solid var(--line);border-radius:8px;margin:0 0 10px;padding:6px 12px}.optg legend{font-weight:600;padding:0 6px;font-size:14px}
++label.chk.opt{align-items:center;justify-content:space-between;margin:6px 0}label.chk.opt span{flex:1}label.chk.opt b{white-space:nowrap}
++.opttot{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px;margin-top:8px;font-size:16px}
