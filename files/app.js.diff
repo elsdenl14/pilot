@@ -1,0 +1,11 @@
+--- base/app.js	2026-11-15 02:01:00.372869706 +0000
++++ out15/app.js	2026-11-15 02:10:22.964264611 +0000
+@@ -120,6 +120,8 @@
+   ...(typeof marchesActions !== "undefined" ? marchesActions : {}),
+   ...(typeof btpActions !== "undefined" ? btpActions : {}),
+   ...(typeof chiffrageActions !== "undefined" ? chiffrageActions : {}),
++  ...(typeof equipesActions !== "undefined" ? equipesActions : {}),
++  ...(typeof stocksActions !== "undefined" ? stocksActions : {}),
+   ...(typeof ressourcesActions !== "undefined" ? ressourcesActions : {}),
+   ...(typeof tempsActions !== "undefined" ? tempsActions : {}),
+   ...(typeof pilotageActions !== "undefined" ? pilotageActions : {}),

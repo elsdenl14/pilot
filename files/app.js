@@ -120,6 +120,8 @@ const ACT = {
   ...(typeof marchesActions !== "undefined" ? marchesActions : {}),
   ...(typeof btpActions !== "undefined" ? btpActions : {}),
   ...(typeof chiffrageActions !== "undefined" ? chiffrageActions : {}),
+  ...(typeof equipesActions !== "undefined" ? equipesActions : {}),
+  ...(typeof stocksActions !== "undefined" ? stocksActions : {}),
   ...(typeof ressourcesActions !== "undefined" ? ressourcesActions : {}),
   ...(typeof tempsActions !== "undefined" ? tempsActions : {}),
   ...(typeof pilotageActions !== "undefined" ? pilotageActions : {}),

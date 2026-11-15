@@ -1,0 +1,11 @@
+--- base/index.html	2026-11-15 02:01:00.373307939 +0000
++++ out15/index.html	2026-11-15 02:10:22.964362443 +0000
+@@ -67,6 +67,8 @@
+     <script src="views-chiffrage.js"></script>
+     <script src="views-marches.js"></script>
+     <script src="views-btp.js"></script>
++    <script src="views-equipes.js"></script>
++    <script src="views-stocks.js"></script>
+     <script src="app.js"></script>
+   </body>
+ </html>
