@@ -214,7 +214,10 @@ const PilotPdf = (() => {
     const WHITE = rgb(1, 1, 1), ZEBRA = rgb(0.975, 0.978, 0.982);
     const lignes = data.lignes?.length ? data.lignes : data.ht > 0 ? [{ designation: "Prestation", quantite: 1, unite: "forfait", prix_unitaire_ht: data.ht, taux_tva: data.taux_tva ?? 20 }] : [];
     const lht = (l) => r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
-    const inc = (l) => l.type_ligne !== "image" && (!l.est_option || l.option_choisie);
+    const inc = (l) => l.type_ligne !== "image" && (!l.est_option || l.option_choisie) && !(l.tranche_cond && !l.tranche_ok);
+    const lotKey = (l) => (typeof mkKey === "function" ? mkKey(l) : String(l.categorie || "").trim());
+    const lotLab = (l) => (typeof mkLabel === "function" ? mkLabel(l) : String(l.categorie || "").trim());
+    const condOff = lignes.filter((l) => l.tranche_cond && !l.tranche_ok && l.type_ligne !== "image");
     const byRate = {};
     for (const l of lignes.filter(inc)) {
       const ht = lht(l), k = String(Number(l.taux_tva));
@@ -230,8 +233,8 @@ const PilotPdf = (() => {
     }
     const groups = [];
     for (const l of lignes.filter((l) => l.nature !== "deduction" && (l.type_ligne === "image" ? emb[l.image_path] : inc(l)))) {
-      const cat = String(l.categorie || "").trim(), g = groups[groups.length - 1];
-      if (g && g.cat === cat) g.items.push(l); else groups.push({ cat, items: [l] });
+      const cat = lotLab(l), k = lotKey(l), g = groups[groups.length - 1];
+      if (g && g.k === k) g.items.push(l); else groups.push({ cat, k, items: [l] });
     }
     groups.forEach((g) => (g.sum = r2(sum(g.items.filter((l) => l.type_ligne !== "image"), lht))));
     // Situation : récapitulatif de l'avancement du marché
@@ -337,6 +340,23 @@ const PilotPdf = (() => {
       y -= 10;
     }
 
+    // ---- Tranches conditionnelles non affermies ----
+    if (condOff.length) {
+      const tr = {};
+      condOff.forEach((l) => { const k = l.tranche || "Tranche conditionnelle"; tr[k] = r2((tr[k] || 0) + lht(l)); });
+      need(40 + Object.keys(tr).length * 17);
+      txt("TRANCHES CONDITIONNELLES  -  NON COMPRISES DANS LE TOTAL", ML, y - 8, { size: 8, f: bold, color: A });
+      y -= 22;
+      Object.entries(tr).forEach(([k, v]) => {
+        need(20);
+        txt(fit(k, 9.5, 330), ML + 6, y - 8, { size: 9.5 });
+        txt(money(v) + " HT", X.tot, y - 8, { size: 9.5, f: bold, right: true });
+        y -= 16;
+        page.drawLine({ start: { x: ML, y: y + 3 }, end: { x: W - ML, y: y + 3 }, thickness: 0.4, color: LINE });
+      });
+      y -= 10;
+    }
+
     // ---- Totaux ----
     const rates = Object.keys(byRate).sort((a, b) => b - a);
     const dedHt = r2(sum(dedLines, lht));
@@ -415,7 +435,9 @@ const PilotPdf = (() => {
       y -= 6;
     };
     if (data.notes) para("Remarques", data.notes);
-    if (kind === "facture" && fx?.nature === "Avoir") {
+    if (kind === "facture" && fx?.nature === "Proforma") {
+      para("Facture proforma", "Document provisoire sans valeur de facture : il ne constitue pas une demande de paiement ferme et n'ouvre pas droit à déduction de la TVA. La facture définitive sera établie après exécution des prestations.");
+    } else if (kind === "facture" && fx?.nature === "Avoir") {
       para("Avoir", "Cet avoir vient en déduction des sommes dues sur la facture d'origine, ou fait l'objet d'un remboursement.");
     } else if (kind === "facture") {
       const delai = ent.delai_paiement_jours ?? 30;
@@ -442,6 +464,10 @@ const PilotPdf = (() => {
       }
       mentionsBlock();
     } else {
+      if (data.aides && data.aides.length) {
+        const tot = r2(sum(data.aides, (a) => Number(a.montant)));
+        para("Aides et primes prévisionnelles", data.aides.map((a) => `${a.type} : ${money(a.montant)}${a.statut === "Estimée" ? " (estimation)" : ""}`).join("\n") + `\nReste à charge estimé après aides : ${money(r2(Number(data.ttc) - tot))} TTC. Montants indicatifs, sous réserve de l'accord des organismes et de l'éligibilité des travaux.`);
+      }
       para("Conditions", `Devis valable ${data.validite_jours || 30} jours à compter de sa date d'émission. Les travaux débuteront après réception du devis daté et signé.`);
       mentionsBlock();
       need(104);

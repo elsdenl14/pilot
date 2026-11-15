@@ -19,7 +19,7 @@ async function lignesOf(K, id) {
 function totauxParTaux(lignes, d) {
   const by = {};
   for (const l of lignes) {
-    if (l.type_ligne === "image" || (l.est_option && !l.option_choisie)) continue;
+    if (l.type_ligne === "image" || (l.est_option && !l.option_choisie) || (l.tranche_cond && !l.tranche_ok)) continue;
     const ht = r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
     const k = String(Number(l.taux_tva));
     by[k] ||= { ht: 0, tva: 0 };
@@ -74,8 +74,8 @@ function docPreview(K, d, lignes) {
   const by = totauxParTaux(lignes, d);
   const rates = Object.keys(by).sort((a, b) => b - a);
   const lht = (l) => r2(l.quantite * l.prix_unitaire_ht);
-  const gs = lignes.length ? groupCats(lignes) : [];
-  gs.forEach((g) => (g.sum = r2(sum(g.lignes.filter((l) => !(l.est_option && !l.option_choisie)), lht))));
+  const gs = lignes.length ? groupCats(lignes, true) : [];
+  gs.forEach((g) => (g.sum = r2(sum(g.lignes.filter((l) => !(l.est_option && !l.option_choisie) && !(l.tranche_cond && !l.tranche_ok)), lht))));
   const recap = gs.filter((g) => g.cat).length >= 2 ? `<div class="doc-recap"><b>Récapitulatif des travaux</b>${gs.map((g, i) => `<div><span>${i + 1}. ${esc(g.cat || "Divers")}</span><span class="num">${E2(g.sum)}</span></div>`).join("")}</div>` : "";
   const fd = K === "facture" ? fdOf(d.id) : null, isDed = (l) => l.nature === "deduction", isLibre = (l) => l.nature === "libre";
   const ded = lignes.filter(isDed);
@@ -156,7 +156,7 @@ async function docDetail(K, id) {
     : "";
   const echHtml = K === "facture" && d.statut !== "Annulée" && !fxIsAvoir(d) ? echCard(d) : "";
   return page(`${esc(docNum(d, K))} ${chip(st)}`, `${K === "facture" && fxNat(d) !== "Facture" ? esc(fxLabel(d)) + " · " : ""}${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
-    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) + fxDevisCard(d) : fxDetailCard(d) + fxLinkedCard(d)}${echHtml}${payHtml}${K === "facture" ? rgInvoiceCard(d) : ""}</div></div>`,
+    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) + fxDevisCard(d) + (typeof mkDevisCards === "function" ? mkDevisCards(d, lignes) : "") : fxDetailCard(d) + fxLinkedCard(d)}${echHtml}${payHtml}${K === "facture" ? rgInvoiceCard(d) : ""}</div></div>`,
     crumbs([K === "devis" ? "Devis" : "Factures", k.route], [docNum(d, K)]));
 }
 
@@ -165,7 +165,7 @@ function ligneRow(l = {}) {
   if (cxCurK === "devis" && l.type_ligne === "image") return cxImageRow(l);
   const tva = l.taux_tva ?? (Number(db.ent.taux_tva_defaut) || 20);
   const nat = l.nature || "normale";
-  return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}" data-tp="${l._tp ?? ""}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Poste libre : libellé (ex : frais de déplacement, remise commerciale)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea>${cxCurK === "devis" ? cxPanel(l) : ""}</td>
+  return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}" data-tp="${l._tp ?? ""}" data-mref="${esc(l.marche_ref || "")}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Poste libre : libellé (ex : frais de déplacement, remise commerciale)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea>${cxCurK === "devis" ? cxPanel(l) : ""}</td>
     <td style="width:78px"><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}"></td>
     <td style="width:86px"><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}"></td>
     <td style="width:104px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
@@ -174,23 +174,25 @@ function ligneRow(l = {}) {
     <td style="width:34px"><button type="button" class="rm" data-rm title="Supprimer la ligne" aria-label="Supprimer la ligne">${svg(ic.x)}</button></td></tr>`;
 }
 // Regroupe les lignes consécutives qui ont la même catégorie
-function groupCats(ls) {
+function groupCats(ls, composite = false) {
   const out = [];
   for (const l of ls.length ? ls : [{}]) {
-    const c = String(l.categorie || "").trim(), last = out[out.length - 1];
-    if (last && last.cat === c) last.lignes.push(l); else out.push({ cat: c, lignes: [l] });
+    const c = String(l.categorie || "").trim(), k = typeof mkKey === "function" ? mkKey(l) : c, last = out[out.length - 1];
+    if (last && last.k === k) last.lignes.push(l);
+    else out.push({ k, cat: composite && typeof mkLabel === "function" ? mkLabel(l) : c, lot: l.lot || "", sous_lot: l.sous_lot || "", tranche: l.tranche || "", tranche_cond: !!l.tranche_cond, tranche_ok: !!l.tranche_ok, lignes: [l] });
   }
   return out;
 }
-const catBlock = (g) => `<section class="cat"><div class="cat-h"><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Nom de la catégorie (ex : Démolition, Plomberie…)" aria-label="Catégorie"><span class="num cat-sub" data-f="sub"></span><button type="button" class="rm" data-rmcat title="Supprimer la catégorie" aria-label="Supprimer la catégorie">${svg(ic.x)}</button></div>
+const catBlock = (g) => `<section class="cat"><div class="cat-h"><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Nom de la catégorie (ex : Démolition, Plomberie…)" aria-label="Catégorie"><span class="num cat-sub" data-f="sub"></span><button type="button" class="rm" data-rmcat title="Supprimer la catégorie" aria-label="Supprimer la catégorie">${svg(ic.x)}</button></div>${cxCurK === "devis" && typeof mkCatFields === "function" ? mkCatFields(g) : ""}
   <div class="tw"><table class="lines"><thead><tr><th>Désignation</th><th>Qté</th><th>Unité</th><th>P.U. HT</th><th>TVA</th><th class="r">Total HT</th><th></th></tr></thead><tbody class="lb">${g.lignes.map(ligneRow).join("")}</tbody></table></div>
   <button type="button" class="btn o sm" data-addl>+ Ajouter une ligne</button></section>`;
 function readLignes(root) {
   const out = [];
   $$(".cat", root).forEach((sec) => {
     const categorie = $('[data-f="cat"]', sec).value.trim();
+    const mkc = cxCurK === "devis" && typeof mkReadCat === "function" ? mkReadCat(sec) : {};
     $$(".lr", sec).forEach((tr) => out.push({
-      ...(cxCurK === "devis" ? (cxApplyMetre(tr), cxRead(tr)) : {}),
+      ...(cxCurK === "devis" ? (cxApplyMetre(tr), cxRead(tr), { ...cxRead(tr), ...mkc, ...(typeof mkReadLine === "function" ? mkReadLine(tr) : {}) }) : {}),
       categorie, nature: tr.dataset.nat || "normale", ref_facture_id: tr.dataset.ref || null, designation: $('[data-f="des"]', tr).value.trim(), description: $('[data-f="desc"]', tr).value.trim(),
       quantite: parseNum($('[data-f="qte"]', tr).value), unite: $('[data-f="uni"]', tr).value.trim() || "u",
       prix_unitaire_ht: parseNum($('[data-f="pu"]', tr).value), taux_tva: Number($('[data-f="tva"]', tr).value),
@@ -240,7 +242,7 @@ function recalcLignes(root) {
 async function saveCats(K, id, ls) {
   const k = KD[K];
   const rows = await q(sb.from(k.lt).select("id").eq(k.fk, id).order("position"));
-  const ext = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : K === "devis" && db.v13 ? cxExt(l) : {});
+  const ext = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : K === "devis" && db.v13 ? { ...cxExt(l), ...(db.v14 && typeof mkExt === "function" ? mkExt(l) : {}) } : {});
   await Promise.all(rows.map((r, i) => (ls[i] ? q(sb.from(k.lt).update({ categorie: ls[i].categorie || null, description: ls[i].description || null, ...ext(ls[i]) }).eq("id", r.id)) : null)));
 }
 async function copyCats(did, fid) {
@@ -295,10 +297,12 @@ async function docForm(K, d, opts = {}) {
       const ls = readLignes(api.el).filter((l) => l.designation || l.prix_unitaire_ht || l.type_ligne === "image");
       if (!ls.some((l) => l.type_ligne !== "image")) throw new Error("Ajoutez au moins une ligne avec une désignation et un prix.");
       const cid = await resolveClient(v);
+      const adj = K === "facture" && db.v8 && $("#f_aj_ret", api.el) ? fxReadAdj(v) : null;
+      if (adj?.autoliquidation) ls.forEach((l) => (l.taux_tva = 0));
       const payload = { id: d?.id || null, client_id: cid, chantier_id: v.chantier_id || null, date: v.date, notes: v.notes || null, lignes: ls,
         ...(K === "devis" ? { validite_jours: parseInt(v.validite_jours) || 30 } : { echeance: v.echeance }) };
-      const adj = K === "facture" && db.v8 && $("#f_aj_ret", api.el) ? fxReadAdj(v) : null;
       const id = await q(sb.rpc("sauver_document", { p_kind: K, p: payload }));
+      if (K === "devis" && opts.parent && db.v14) { try { await q(sb.from("devis").update({ parent_id: opts.parent }).eq("id", id)); } catch (e) { console.warn(e); } }
       if (adj) await fxSaveDetails(id, adj);
       try { await saveCats(K, id, ls); } catch (e) { console.warn(e); toast("Document enregistré, mais les catégories et descriptions n'ont pas pu l'être : exécutez migration_v4.sql dans Supabase.", "dn"); }
       api.close();
@@ -343,7 +347,8 @@ async function docPdfBytes(K, id) {
     qr: K === "facture" && d.statut !== "Brouillon" && typeof rgEpcMatrix === "function" ? rgEpcMatrix(d) : null,
     fx: K === "facture" && typeof fxPdfData === "function" ? fxPdfData(d) : null,
     empreinte: K === "facture" && d.statut !== "Brouillon" && typeof cfEmpreinte === "function" ? await cfEmpreinte(d, lignes) : "",
-    mentions: typeof lgBuild === "function" ? lgBuild(K, d, c, ch, lignes) : [],
+    mentions: [...(typeof lgBuild === "function" ? lgBuild(K, d, c, ch, lignes) : []), ...(K === "facture" && fdOf(id)?.autoliquidation ? [{ text: AUTO_MENTION }] : [])],
+    aides: K === "devis" && db.v14 && typeof aidesOf === "function" ? aidesOf(id).filter((a) => a.statut !== "Refusée") : [],
   };
   const pctx = await pdfContext(K);
   if (typeof cxPdfImages === "function") pctx.images = await cxPdfImages(lignes);

@@ -29,7 +29,7 @@ const emptyDb = () => ({
   efact: [], sigs: [], connexions: [], cx: {}, nbOuvrages: 0, v7: false,
   fd: {}, v8: false,
   rg: { ribs: [], cribs: [], cheques: [], remises: [], credits: [], suivi: [], liens: [] }, v9: false,
-  cf: { journal: [], clotures: [] }, ml: { modeles: [], gmail: null, mails: [] }, nt: [], pv: { list: [], reserves: [] }, v10: false, v11: false, v12: false, v12err: "", taches: [], evts: [], phases: [], sts: [], stm: [], mat: [], matA: [], matE: [], tps: [], obj: [], chg: [], cat: [], catPrix: [], bcs: [], bcl: [], bcr: [], lots: [], urs: [],
+  cf: { journal: [], clotures: [] }, ml: { modeles: [], gmail: null, mails: [] }, nt: [], pv: { list: [], reserves: [] }, v10: false, v11: false, v12: false, v12err: "", v13: false, v14: false, v14err: "", mimp: [], axes: [], axv: [], pfs: [], mrev: [], ivals: [], aides: [], atts: [], dech: [], dgds: [], avn: {}, taches: [], evts: [], phases: [], sts: [], stm: [], mat: [], matA: [], matE: [], tps: [], obj: [], chg: [], cat: [], catPrix: [], bcs: [], bcl: [], bcr: [], lots: [], urs: [],
 });
 let db = emptyDb();
 
@@ -114,6 +114,7 @@ async function load() {
   try { if (typeof loadV11 === "function") await loadV11(); } catch (e) { db.v11 = false; console.warn(e); }
   try { if (typeof loadV12 === "function") await loadV12(); } catch (e) { db.v12 = false; console.warn(e); }
   try { if (typeof loadV13 === "function") await loadV13(); } catch (e) { db.v13 = false; console.warn(e); }
+  try { if (typeof loadV14 === "function") await loadV14(); } catch (e) { db.v14 = false; db.v14err = e?.message || String(e); console.warn(e); }
   try { if (typeof loadV10 === "function") await loadV10(); } catch (e) { db.v10 = false; console.warn(e); }
   try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }
 }
@@ -154,6 +155,7 @@ const ic = {
   rentabilite: "M4 19V9 M10 19V5 M16 19v-7 M22 19H2",
   objectifs: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 16a4 4 0 100-8 4 4 0 000 8z M12 12h.01",
   tresorerie: "M3 17l6-6 4 4 8-8 M15 7h6v6",
+  marches: "M4 4h16v16H4z M4 9h16 M9 9v11 M13 13h4 M13 16h4",
   achats: "M3 4h2l2.5 11h10L20 7H6 M9 20a1 1 0 100-2 1 1 0 000 2z M17 20a1 1 0 100-2 1 1 0 000 2z",
   analyses: "M4 20v-9 M10 20V4 M16 20v-7 M22 20H2",
   params: "M4 7h10 M18 7h2 M4 17h2 M10 17h10 M14 5v4 M6 15v4",
@@ -182,6 +184,7 @@ const NAV = [
   ["achats", "Achats", null],
   ["fournisseurs", "Fournisseurs", null],
   ["devis", "Devis", null],
+  ["marches", "Marchés et analyses", null],
   ["factures", "Factures", null],
   ["efacture", "Facture électronique", null],
   ["mails", "Messagerie", null],

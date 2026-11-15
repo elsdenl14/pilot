@@ -253,6 +253,7 @@ function chantierDetail(id) {
     </div><div>
       ${typeof chPlanCard === "function" ? chPlanCard(id) : ""}
       ${typeof chRentaCard === "function" ? chRentaCard(id) : ""}
+      ${typeof mkChantierCards === "function" ? mkChantierCards(id) : ""}
       ${typeof pvChantierCard === "function" ? pvChantierCard(id) : ""}
       ${typeof ntCard === "function" ? ntCard("chantier", id) : ""}
       ${dcCard("chantier", id)}

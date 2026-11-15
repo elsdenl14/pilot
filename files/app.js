@@ -117,6 +117,8 @@ const ACT = {
   ...(typeof efbatchActions !== "undefined" ? efbatchActions : {}),
   ...(typeof urssafActions !== "undefined" ? urssafActions : {}),
   ...(typeof planningActions !== "undefined" ? planningActions : {}),
+  ...(typeof marchesActions !== "undefined" ? marchesActions : {}),
+  ...(typeof btpActions !== "undefined" ? btpActions : {}),
   ...(typeof chiffrageActions !== "undefined" ? chiffrageActions : {}),
   ...(typeof ressourcesActions !== "undefined" ? ressourcesActions : {}),
   ...(typeof tempsActions !== "undefined" ? tempsActions : {}),

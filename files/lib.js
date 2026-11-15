@@ -37,6 +37,7 @@ const loadScript = (url) =>
 const LIBS = {
   pdflib: "vendor/pdf-lib.min.js",
   jszip: "vendor/jszip.min.js",
+  xlsx: "vendor/xlsx.full.min.js",
   pdfjs: new URL("vendor/pdf.min.mjs", document.baseURI).href,
   pdfjsWorker: new URL("vendor/pdf.worker.min.mjs", document.baseURI).href,
 };

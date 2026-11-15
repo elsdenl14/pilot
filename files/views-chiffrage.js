@@ -3,7 +3,7 @@
 
 const CX_TYPES = { materiau: "Matériau", main_oeuvre: "Main-d'œuvre", materiel: "Matériel", sous_traitance: "Sous-traitance" };
 const cxNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-const cxIncluded = (l) => l.type_ligne !== "image" && !l.est_option;
+const cxIncluded = (l) => l.type_ligne !== "image" && !l.est_option && !(l.tranche_cond && !l.tranche_ok);
 
 /* ---------- Réglages et coefficient de vente ---------- */
 function cxReglages() {
@@ -488,7 +488,7 @@ function cxEditorMount(m, K) {
 async function cxAvenant(id) {
   const d = byId(db.devis, id);
   if (!d) return;
-  await docForm("devis", null, { client: d.client_id, chantier: d.chantier_id, lignes: [], notes: `Avenant au devis ${d.numero || ""} : travaux complémentaires.`, dictee: true });
+  await docForm("devis", null, { client: d.client_id, chantier: d.chantier_id, lignes: [], notes: `Avenant au devis ${d.numero || ""} : travaux complémentaires.`, dictee: true, parent: d.id });
 }
 const cxMargeDevis = (ls) => {
   let ca = 0, cout = 0, sans = 0;
@@ -510,9 +510,9 @@ async function loadV13() {
 
 /* ---------- Aides diverses ---------- */
 // Lignes qu'on peut facturer : sans images ni options non retenues
-const cxBillable = (ls) => ls.filter((l) => l.type_ligne !== "image" && (!l.est_option || l.option_choisie));
+const cxBillable = (ls) => ls.filter((l) => l.type_ligne !== "image" && (!l.est_option || l.option_choisie) && !(l.tranche_cond && !l.tranche_ok));
 // Aperçu à l'écran : les images ne sont pas listées, les options sont repérées
-const cxPreviewLignes = (ls) => ls.filter((l) => l.type_ligne !== "image").map((l) => (l.est_option ? { ...l, designation: `${l.designation} (option ${l.option_choisie ? "retenue" : "non retenue"})` } : l));
+const cxPreviewLignes = (ls) => ls.filter((l) => l.type_ligne !== "image").map((l) => (l.est_option ? { ...l, designation: `${l.designation} (option ${l.option_choisie ? "retenue" : "non retenue"})` } : l.tranche_cond && !l.tranche_ok ? { ...l, designation: `${l.designation} (tranche conditionnelle non affermie)` } : l));
 // Ligne de la fiche devis (page interne uniquement)
 function cxDetailMarge(ls) {
   const x = cxMargeDevis(ls), opts = ls.filter((l) => l.est_option);

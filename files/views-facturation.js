@@ -74,7 +74,7 @@ const fxPending = () => {
 
 /* ---------- Devis : ce qui est déjà facturé ---------- */
 const fxLinked = (did) => db.factures.filter((f) => (fdOf(f.id)?.devis_id === did || f.devis_id === did) && f.statut !== "Annulée");
-const fxBilledHt = (did) => r2(sum(fxLinked(did), (f) => f.montant_ht));
+const fxBilledHt = (did) => r2(sum(fxLinked(did), (f) => f.montant_ht - (Number(fdOf(f.id)?.revision?.montant) || 0)));
 const fxResteDevis = (d) => (fxLinked(d.id).length ? r2(d.montant_ht - fxBilledHt(d.id)) : d.montant_ht);
 const fxRates = (lignes, d) => Object.entries(totauxParTaux(lignes, d)).map(([taux, v]) => ({ taux: Number(taux), ht: r2(v.ht) })).filter((x) => Math.abs(x.ht) > 0.004);
 
@@ -88,7 +88,8 @@ function fxAdjFields(d = {}) {
     ${f("aj_prime", "Prime énergétique déduite (€ TTC)", d.prime_montant, { hint: "MaPrimeRénov', CEE… : le client ne la paie pas, vous la percevez." })}
     ${fld({ k: "aj_primel", l: "Nom de la prime", v: d.prime_libelle || "", r: 0, ph: "MaPrimeRénov', prime CEE…" })}
     ${f("aj_pro", "Compte prorata (% du HT)", d.prorata_pct)}${f("aj_proe", "ou montant fixe du prorata (€)", d.prorata_montant)}
-    ${f("aj_esc", "Escompte pour paiement anticipé (%)", d.escompte_pct)}${fld({ k: "aj_escj", l: "Si payé sous (jours)", t: "number", v: d.escompte_jours || "", r: 0 })}`;
+    ${f("aj_esc", "Escompte pour paiement anticipé (%)", d.escompte_pct)}${fld({ k: "aj_escj", l: "Si payé sous (jours)", t: "number", v: d.escompte_jours || "", r: 0 })}
+    ${db.v14 ? fld({ k: "aj_auto", l: "Autoliquidation de la TVA (sous-traitance)", t: "select", o: [{ v: "non", l: "Non : TVA facturée normalement" }, { v: "oui", l: "Oui : facture sans TVA, mention d'autoliquidation" }], v: d.autoliquidation ? "oui" : "non", r: 0, cls: "full", hint: "Pour les travaux sous-traités à un entrepreneur principal (art. 283-2 nonies du CGI). Toutes les lignes passent à 0 % de TVA. À valider selon votre situation fiscale." }) : ""}`;
 }
 function fxReadAdj(v) {
   const a = {
@@ -97,6 +98,7 @@ function fxReadAdj(v) {
     prorata_pct: parseNum(v.aj_pro), prorata_montant: parseNum(v.aj_proe),
     escompte_pct: parseNum(v.aj_esc), escompte_jours: parseInt(v.aj_escj) || 0,
   };
+  if (v.aj_auto !== undefined) a.autoliquidation = v.aj_auto === "oui";
   if (a.retenue_pct < 0 || a.retenue_pct > 5) throw new Error("La retenue de garantie ne peut pas dépasser 5 % du marché (loi du 16 juillet 1971).");
   if (a.prime_montant < 0 || a.prorata_pct < 0 || a.prorata_pct > 100 || a.prorata_montant < 0) throw new Error("Vérifiez les montants de prime et de compte prorata.");
   if (a.escompte_pct < 0 || a.escompte_pct > 100 || (a.escompte_pct > 0 && a.escompte_jours < 1)) throw new Error("Escompte : indiquez le pourcentage et le délai en jours.");
@@ -112,6 +114,7 @@ async function fxSaveDetails(fid, patch) {
   await q(sb.from("factures_details").upsert({ facture_id: fid, ...patch }, { onConflict: "facture_id" }));
 }
 async function fxDraft({ id = null, client_id, chantier_id, date, echeance, notes, lignes, devis_id, details }) {
+  if (details?.autoliquidation) lignes = lignes.map((l) => ({ ...l, taux_tva: 0 }));
   const fid = await q(sb.rpc("sauver_document", { p_kind: "facture", p: { id, client_id, chantier_id: chantier_id || null, date, notes: notes || null, echeance, lignes } }));
   await fxSaveLines(fid, lignes);
   await fxSaveDetails(fid, { devis_id: devis_id || null, ...details });
@@ -197,10 +200,10 @@ function fxPostes(lignes, d, detaille) {
   lignes.forEach((l, i) => {
     const ht = r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
     if (!ht) return;
-    const cat = String(l.categorie || "").trim();
-    const key = detaille ? `l${i}` : "c:" + (cat || "Travaux");
+    const cat = String(l.categorie || "").trim(), grp = String(l.lot || "").trim() || cat;
+    const key = detaille ? `l${i}` : "c:" + (grp || "Travaux");
     let p = out.find((x) => x.key === key);
-    if (!p) out.push((p = { key, label: detaille ? l.designation : cat || "Travaux", cat, rates: {}, marche: 0 }));
+    if (!p) out.push((p = { key, label: detaille ? l.designation : grp || "Travaux", cat, rates: {}, marche: 0, qte: detaille ? Number(l.quantite) : 0, unite: l.unite || "" }));
     p.rates[Number(l.taux_tva)] = r2((p.rates[Number(l.taux_tva)] || 0) + ht);
     p.marche = r2(p.marche + ht);
   });
@@ -217,12 +220,25 @@ async function fxSituation(did, nat, edit) {
   (edit ? fdOf(edit.id)?.avancement || [] : []).forEach((a) => (cur[a.key] = Number(a.cum) || 0));
   const no = edit ? fdOf(edit.id)?.situation_no || prevInv.length + 1 : prevInv.length + 1;
   const marcheTot = r2(sum(postes, (p) => p.marche));
+  // v14 : reprise automatique des acomptes et révision de prix
+  const acRates = {};
+  let acId = "", rev = null;
+  if (db.v14) {
+    for (const a of fxLinked(did).filter((x) => x.id !== edit?.id && fxNat(x) === "Acompte")) {
+      for (const r of fxRates(await lignesOf("facture", a.id), a)) acRates[r.taux] = r2((acRates[r.taux] || 0) + r.ht);
+      acId ||= a.id;
+    }
+    rev = typeof revOf === "function" ? revOf(did) : null;
+  }
+  const acTot = r2(sum(Object.values(acRates), (x) => x)), acDone = r2(sum(prevInv, (p) => Number(p.acompte_deduit) || 0));
+  const acDeduction = (ce) => (acTot > 0 && marcheTot > 0 && ce > 0 ? Math.min(Math.max(0, r2(acTot - acDone)), r2((acTot * ce) / marcheTot)) : 0);
   const rows = postes.map((p, i) => `<tr data-i="${i}"><td>${esc(p.label)}${!detaille || !p.cat ? "" : `<small class="mut" style="display:block">${esc(p.cat)}</small>`}</td><td class="r num">${fmtNum(p.marche)}</td><td class="r num">${fmtNum(prev[p.key] || 0, 1)} %</td>
-    <td style="width:96px"><input type="text" inputmode="decimal" data-cum value="${String(cur[p.key] ?? prev[p.key] ?? 0).replace(".", ",")}" aria-label="Avancement cumulé de ${esc(p.label)}"></td><td class="r num" data-ce>0,00</td></tr>`).join("");
+    <td style="width:96px"><input type="text" inputmode="decimal" data-cum value="${String(cur[p.key] ?? prev[p.key] ?? 0).replace(".", ",")}" aria-label="Avancement cumulé de ${esc(p.label)}"></td>${detaille && p.qte ? `<td style="width:110px"><input type="text" inputmode="decimal" data-cq value="${fmtNum(((cur[p.key] ?? prev[p.key] ?? 0) * p.qte) / 100, 3).replace(/\s/g, "")}" aria-label="Quantité cumulée de ${esc(p.label)}"><small class="mut">sur ${fmtNum(p.qte, 2)} ${esc(p.unite)}</small></td>` : detaille ? "<td></td>" : ""}<td class="r num" data-ce>0,00</td></tr>`).join("");
   const body = `<div class="frm"><p class="mut full" style="margin:0">Devis ${esc(d.numero)} · ${esc(d.client_nom)} · marché ${E2(marcheTot)} HT. Indiquez l'avancement <b>cumulé</b> de chaque ${detaille ? "ligne" : "poste"} : Pilot déduit ce qui a déjà été facturé.</p>
     ${fxDates(edit)}
+    ${rev ? fld({ k: "rev_mois", l: `Révision de prix (indice ${rev.indice})`, t: "select", o: [{ v: "", l: "Pas de révision" }, ...moisOpts(24).map((m) => ({ v: m, l: "Indice de " + m }))], v: (edit && fdOf(edit.id)?.revision?.mois) || "", r: 0, hint: "Cn = a + (1 − a) × In / I0, appliqué aux travaux de cette situation." }) : ""}${acTot > 0 ? `<p class="up full" style="margin:0">Acomptes déjà facturés : ${E2(acTot)} HT${acDone ? ` (dont ${E2(acDone)} déjà récupérés)` : ""}. Ils seront déduits au prorata de cette situation.</p>` : ""}
     <div class="full"><div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap"><span class="mut">Appliquer le même avancement partout :</span><input type="text" inputmode="decimal" id="allpct" style="width:80px" placeholder="%"><button type="button" class="btn o sm" id="allgo">Appliquer</button></div>
-    <div class="tw"><table class="lines"><thead><tr><th>${detaille ? "Ligne" : "Poste"}</th><th class="r">Marché HT</th><th class="r">Déjà facturé</th><th>Avancement cumulé</th><th class="r">Cette situation HT</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tw"><table class="lines"><thead><tr><th>${detaille ? "Ligne" : "Poste"}</th><th class="r">Marché HT</th><th class="r">Déjà facturé</th><th>Avancement cumulé</th>${detaille ? "<th>Qté cumulée</th>" : ""}<th class="r">Cette situation HT</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="totbox" id="sitot" style="margin-top:10px"></div></div>
     ${fxAdjFields(edit ? fdOf(edit.id) : {})}</div>`;
   const read = (m) => $$("tr[data-i]", m).map((tr) => {
@@ -236,9 +252,15 @@ async function fxSituation(did, nat, edit) {
         const r = read(m);
         $$("tr[data-i]", m).forEach((tr, i) => ($("[data-ce]", tr).textContent = fmtNum(r[i].ce)));
         const ce = r2(sum(r, (x) => x.ce)), cumHt = r2(sum(r, (x) => (x.p.marche * x.cum) / 100));
-        $("#sitot", m).innerHTML = `<div><span>Cette situation HT</span><span class="num">${E2(ce)}</span></div><div><span>Avancement global cumulé</span><span class="num">${fmtNum((cumHt / marcheTot) * 100, 1)} %</span></div>`;
+        const dAc = acDeduction(ce);
+        $("#sitot", m).innerHTML = `<div><span>Cette situation HT</span><span class="num">${E2(ce)}</span></div>${dAc ? `<div><span>Acompte récupéré</span><span class="num">- ${E2(dAc)}</span></div>` : ""}<div><span>Avancement global cumulé</span><span class="num">${fmtNum((cumHt / marcheTot) * 100, 1)} %</span></div>`;
       };
-      m.addEventListener("input", calc);
+      m.addEventListener("input", (e) => {
+        const tr = e.target.closest?.("tr[data-i]");
+        if (tr && e.target.matches("[data-cq]")) { const p = postes[+tr.dataset.i]; if (p.qte) $("[data-cum]", tr).value = String(r2(Math.min(100, (parseNum(e.target.value) / p.qte) * 100) * 1000) / 1000).replace(".", ","); }
+        else if (tr && e.target.matches("[data-cum]")) { const p = postes[+tr.dataset.i], q2 = $("[data-cq]", tr); if (q2 && p.qte) q2.value = String(Math.round(((parseNum(e.target.value) * p.qte) / 100) * 1000) / 1000).replace(".", ","); }
+        calc();
+      });
       $("#allgo", m).onclick = () => { const v = parseNum($("#allpct", m).value); $$("[data-cum]", m).forEach((i, k) => { i.value = String(Math.max(v, prev[postes[k].key] || 0)).replace(".", ","); }); calc(); };
       calc();
     },
@@ -255,8 +277,25 @@ async function fxSituation(did, nat, edit) {
         }
       }
       if (!ls.length) throw new Error("Aucun avancement nouveau : augmentez le pourcentage d'au moins un poste.");
+      const ceTot = r2(sum(ls, (l) => l.prix_unitaire_ht));
+      let revInfo = null;
+      if (db.v14 && rev && v.rev_mois) {
+        const R = btRevision(did, v.rev_mois);
+        if (!R || R.manque) throw new Error(`L'indice ${rev.indice} de ${v.rev_mois} n'est pas saisi : ajoutez-le dans Marchés et analyses, onglet Indices.`);
+        const byT = {};
+        ls.forEach((l) => (byT[l.taux_tva] = r2((byT[l.taux_tva] || 0) + l.prix_unitaire_ht)));
+        let tot = 0;
+        for (const [t, ht] of Object.entries(byT)) { const dl = r2(ht * (R.cn - 1)); if (Math.abs(dl) >= 0.005) { tot = r2(tot + dl); ls.push(fxLine({ categorie: "Révision de prix", designation: `Révision de prix : ${R.txt}`, unite: "", prix_unitaire_ht: dl, taux_tva: Number(t) })); } }
+        revInfo = { ...R, montant: tot };
+      }
+      const dAc = acDeduction(ceTot);
+      if (dAc > 0) {
+        let rest = dAc;
+        const ts = Object.keys(acRates);
+        ts.forEach((t, i) => { const part = i === ts.length - 1 ? rest : r2((dAc * acRates[t]) / acTot); rest = r2(rest - part); if (part) ls.push(fxLine({ categorie: "Déjà facturé", designation: `Déduction : acompte récupéré (${fxPc((dAc / acTot) * 100)} % de l'acompte)`, unite: "", prix_unitaire_ht: -part, taux_tva: Number(t), nature: "deduction", ref_facture_id: acId })); });
+      }
       const fid = await fxDraft({ id: edit?.id || null, client_id: d.client_id, chantier_id: d.chantier_id, date: v.date, echeance: v.echeance, notes: edit?.notes || null, lignes: ls, devis_id: did,
-        details: { nature: nat, situation_no: no, marche_ht: d.montant_ht, avancement: r.map((x) => ({ key: x.p.key, label: x.p.label, marche: x.p.marche, prev: x.pv, cum: x.cum })), ...adj } });
+        details: { nature: nat, situation_no: no, marche_ht: d.montant_ht, avancement: r.map((x) => ({ key: x.p.key, label: x.p.label, marche: x.p.marche, prev: x.pv, cum: x.cum })), ...(db.v14 ? { acompte_deduit: dAc, revision: revInfo } : {}), ...adj } });
       api.close(); toast(`Situation n° ${no} enregistrée en brouillon.`, "ok");
       await refresh(); go("factures/" + fid);
     },
@@ -270,7 +309,7 @@ async function fxFinale(did, edit) {
   const ded = [];
   for (const p of prevs) {
     const pl = await lignesOf("facture", p.id);
-    for (const r of fxRates(pl, p)) ded.push({ p, ...r });
+    for (const r of fxRates(pl.filter((l) => l.categorie !== "Révision de prix"), p)) ded.push({ p, ...r });
   }
   const dedHt = r2(sum(ded, (x) => x.ht));
   const draft = prevs.some((p) => p.statut === "Brouillon");
@@ -279,7 +318,7 @@ async function fxFinale(did, edit) {
     ${prevs.map((p) => `<dt>${esc(p.numero || "Brouillon")} · ${esc(fxLabel(p))}</dt><dd>- ${E2(sum(ded.filter((x) => x.p.id === p.id), (x) => x.ht))} HT</dd>`).join("") || `<dt>Déjà facturé</dt><dd>Rien</dd>`}
     <dt><b>Reste à facturer HT</b></dt><dd><b>${E2(r2(d.montant_ht - dedHt))}</b></dd></dl>
     ${draft ? `<p class="badge-warn" style="margin:8px 0 0">Une facture précédente est encore en brouillon : émettez-la avant la facture finale.</p>` : ""}</div>
-    ${fxDates(edit)}${fxAdjFields(edit ? fdOf(edit.id) : {})}</div>`;
+    ${fxDates(edit)}${fxAdjFields(edit ? fdOf(edit.id) : db.v14 && typeof btPrimeDefaut === "function" ? btPrimeDefaut(did) : {})}</div>`;
   modal(edit ? "Modifier la facture finale" : "Facture finale", body, {
     wide: true, submit: edit ? "Enregistrer" : "Créer le brouillon",
     onSubmit: async (v, api) => {
