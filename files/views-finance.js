@@ -263,8 +263,9 @@ V.compta = (r) => {
   // lien profond : #/compta?tab=banque (consommé une seule fois)
   if (r?.qs?.get("tab")) { ST.tab.compta = r.qs.get("tab"); history.replaceState(null, "", "#/compta"); }
   const tab = ST.tab.compta || "synthese", y = ST.year;
-  const t = tabs("compta", [["synthese", "Synthèse"], ["banque", "Banque"], ["journal", "Journal"], ["tva", "TVA"], ...(typeof cfTab === "function" ? [["conformite", "Conformité"]] : []), ["comptable", "Espace comptable"]], tab);
+  const t = tabs("compta", [["synthese", "Synthèse"], ["banque", "Banque"], ["journal", "Journal"], ["tva", "TVA"], ...(typeof urssafTab === "function" ? [["urssaf", "URSSAF"]] : []), ...(typeof cfTab === "function" ? [["conformite", "Conformité"]] : []), ["comptable", "Espace comptable"]], tab);
   if (tab === "banque") return banqueTab(t);
+  if (tab === "urssaf" && typeof urssafTab === "function") return urssafTab(t);
   if (tab === "conformite" && typeof cfTab === "function") return cfTab(t);
   const yr = `<div class="seg"><button data-act="yearPrev" aria-label="Année précédente">‹</button><button disabled style="font-weight:600;color:var(--tx)">${y}</button><button data-act="yearNext" aria-label="Année suivante">›</button></div>`;
   const reg = (db.ent.tva_regime || "encaissements") === "debits" ? "sur les débits (à la facturation)" : "sur les encaissements (au paiement)";
@@ -308,7 +309,7 @@ function comptableTab(t, yr) {
   const y = ST.year;
   const exps = [["factures", "Factures émises"], ["paiements", "Paiements reçus"], ["depenses", "Achats et dépenses"], ["clients", "Clients"], ["journal", "Journal"], ["tva", "TVA par mois"]];
   const body = `${card(`Exports pour le comptable, année ${y}`, `<div class="cb" style="display:flex;gap:8px;flex-wrap:wrap">${exps.map(([k, l]) => btn(l + " (CSV)", "exportCsv", "", k, "o sm")).join("")}</div>
-      <div class="cb" style="border-top:1px solid var(--line2);display:flex;gap:14px;align-items:center;flex-wrap:wrap">${btn("Télécharger le dossier complet (ZIP)", "exportZip", "", "", "")}<span class="mut">CSV, PDF des factures émises, justificatifs des dépenses et pièces déposées ci-dessous.</span></div>`, yr)}
+      <div class="cb" style="border-top:1px solid var(--line2);display:flex;gap:14px;align-items:center;flex-wrap:wrap">${btn("Télécharger le dossier complet (ZIP)", "exportZip", "", "", "")}${typeof efbOpen === "function" ? btn("Factures en Factur-X (ZIP)", "efbOpen", "", "export", "o") : ""}<span class="mut">CSV, PDF des factures émises, justificatifs des dépenses et pièces déposées ci-dessous.</span></div>`, yr)}
     ${card("Pièces pour le comptable", tbl(["Document", "Type", "Période", ""], db.docsCompta.map((x) => ({ t: x.libelle, c: [`<strong>${esc(x.libelle)}</strong>`, esc(x.type), x.periode ? D(x.periode).slice(3) : "-", `<span class="r"><button class="lk" data-act="docOpen" data-id="${x.id}">Ouvrir</button> <button class="lk w" data-act="docDel" data-id="${x.id}" style="margin-left:10px">Supprimer</button></span>`] })), "Aucune pièce. Déposez ici les relevés bancaires, attestations, déclarations…"), btn("Déposer un document", "docNew", "", "", "o sm w"))}
     ${ro ? "" : card("Accès du comptable", `${db.acces.map((a) => `<div class="row"><div><b>${esc(a.email)}</b><small>Lecture seule : factures, paiements, dépenses, justificatifs</small></div><button class="lk" data-act="accesDel" data-id="${a.id}">Retirer</button></div>`).join("") || `<p class="mut" style="margin:0;padding:16px 18px">Aucun accès donné.</p>`}
       <form data-form="acces" class="cb" style="display:flex;gap:8px;border-top:1px solid var(--line2);flex-wrap:wrap"><input type="email" name="email" placeholder="email@cabinet-comptable.fr" required style="flex:1;min-width:220px"><button class="btn">Donner l'accès</button></form>
@@ -446,10 +447,13 @@ const entPatch = async (patch) => {
 async function saveEntForm(form) {
   if (!guard()) return;
   const v = Object.fromEntries(new FormData(form));
+  const ribOk = typeof ribGuard === "function" ? await ribGuard("entreprise", db.ent.nom || "Entreprise", db.ent.iban, v.iban, ribNorm(db.ent.bic) !== ribNorm(v.bic)) : {};
+  if (!ribOk) return toast("Modification annulée : coordonnées bancaires inchangées.", "dn");
   await entPatch({ nom: v.nom, forme_juridique: v.forme_juridique || null, siret: v.siret || null, tva_intracom: v.tva_intracom || null, rcs: v.rcs || null, adresse: v.adresse || null,
     telephone: v.telephone || null, email: v.email || null, mentions_legales: v.mentions_legales || null,
     delai_paiement_jours: parseInt(v.delai_paiement_jours) || 30, taux_tva_defaut: parseNum(v.taux_tva_defaut) || 20, tva_regime: v.tva_regime,
     jour_tva: Math.min(28, Math.max(1, parseInt(v.jour_tva) || 20)), tresorerie_initiale: parseNum(v.tresorerie_initiale), iban: v.iban || null, bic: v.bic || null });
+  if (ribOk.motif && typeof ribAnnotate === "function") await ribAnnotate("entreprise", ribOk);
   toast("Paramètres enregistrés.", "ok");
   await refresh();
 }

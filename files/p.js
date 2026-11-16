@@ -124,6 +124,11 @@ async function optsSave() { if (OPTS && OPTS.options.length) await rpc("partage_
 async function show() {
   if (!/^[0-9a-f-]{36}$/i.test(token)) return fail("Ce lien n'est pas valide.");
   if (!CFG.url || /VOTRE/.test(CFG.url)) return fail("Le site n'est pas configuré.");
+  // v16 : suivi de consultation, expiration et révocation (ignoré si la migration v16 n'est pas faite)
+  try {
+    const vu = await rpc("partage_vue", { p_token: token, p_ua: navigator.userAgent });
+    if (vu && vu.ok === false && vu.raison !== "inconnu") return fail(vu.raison === "expire" ? "Ce lien a expiré. Demandez-en un nouveau à l'entreprise." : "Ce lien a été désactivé par l'entreprise.");
+  } catch (e) { /* migration v16 absente */ }
   let d;
   try { d = await rpc("partage_get", { p_token: token }); } catch (e) { return fail(e.message); }
   if (!d) return fail("Ce document n'existe plus ou le lien est incorrect.");
@@ -257,4 +262,92 @@ async function showPv() {
   };
 }
 
-pvToken ? showPv() : show();
+/* ---------- Portail du maître d'œuvre : p.html?m=<jeton> ---------- */
+const moeToken = new URLSearchParams(location.search).get("m") || "";
+const offreToken = new URLSearchParams(location.search).get("o") || "";
+async function showMoe() {
+  if (!/^[0-9a-f-]{36}$/i.test(moeToken)) return fail("Ce lien n'est pas valide.");
+  if (!CFG.url || /VOTRE/.test(CFG.url)) return fail("Le site n'est pas configuré.");
+  let d;
+  try { d = await rpc("moe_get", { p_token: moeToken }); } catch (e) { return fail(e.message); }
+  const e = d.entreprise || {}, L = d.lignes || [], av = {};
+  (d.avis || []).forEach((a) => (av[a.i] = a));
+  const locked = ["Validée", "Validée avec réserves", "Refusée"].includes(d.statut);
+  const pct = (n) => (Math.round(Number(n) * 100) / 100).toLocaleString("fr-FR") + " %";
+  root.innerHTML = `
+    <div class="card top"><div><p class="mut" style="margin:0">${esc(e.nom || "")}</p><h1>${esc(d.titre)}</h1><p class="mut" style="margin:0">${d.chantier ? esc(d.chantier) + " · " : ""}version ${d.version}${d.dest_nom ? " · pour " + esc(d.dest_nom) : ""}</p></div>
+      <div style="text-align:right"><div class="big">${eur(d.total_ht)}</div><span class="mut">HT sur la période</span></div></div>
+    ${d.message ? `<div class="card"><p style="margin:0;white-space:pre-wrap">${esc(d.message)}</p></div>` : ""}
+    ${locked ? `<div class="card"><p style="margin:0"><span class="badge ${d.statut === "Refusée" ? "dn" : "ok"}">${esc(d.statut)}</span> par ${esc(d.decide_par || "")} le ${dt(d.decide_at)}.</p>${d.commentaire ? `<p style="margin:8px 0 0;white-space:pre-wrap">${esc(d.commentaire)}</p>` : ""}</div>` : ""}
+    <form class="card" id="mf"><h2>Lignes à valider</h2>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left"><th>Désignation</th><th style="text-align:right">Cumul</th><th style="text-align:right">Montant HT</th><th>Avis</th></tr></thead><tbody>
+      ${L.map((l, i) => { const a = av[i] || {}; return `<tr style="border-top:1px solid var(--line)"><td style="padding:8px 6px 8px 0">${esc(l.label)}</td><td style="text-align:right;white-space:nowrap">${pct(l.cum)}</td><td style="text-align:right;white-space:nowrap">${eur(l.montant)}</td>
+        <td style="padding:6px 0;min-width:210px">${locked ? `${a.ok === true ? "✓ OK" : a.ok === false ? "✗ À revoir" : ""} ${esc(a.c || "")}` : `<select name="ok${i}" aria-label="Avis sur ${esc(l.label)}"><option value="">Pas d'avis</option><option value="true"${a.ok === true ? " selected" : ""}>OK</option><option value="false"${a.ok === false ? " selected" : ""}>À revoir</option></select><input name="c${i}" maxlength="1000" placeholder="Commentaire" value="${esc(a.c || "")}" style="width:100%;margin-top:4px">`}</td></tr>`; }).join("")}
+      </tbody></table></div>
+      ${locked ? "" : `<label style="display:block;margin-top:14px">Commentaire général<textarea name="g" rows="3" maxlength="3000" style="width:100%">${esc(d.commentaire || "")}</textarea></label>
+      <label style="display:block;margin-top:10px">Votre nom<input name="nom" autocomplete="name" maxlength="120" style="width:100%" value="${esc(d.decide_par || "")}"></label>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn" type="submit" data-d="Validée">Valider</button><button class="btn o" type="submit" data-d="Validée avec réserves">Valider avec réserves</button><button class="btn o" type="submit" data-d="Commentée">Envoyer mes commentaires</button><button class="btn dn" type="submit" data-d="Refusée">Refuser</button></div>
+      <p class="er" role="alert"></p>
+      <p class="mut" style="font-size:13px;margin:8px 0 0">${esc(e.nom || "L'entreprise")} est prévenue de votre réponse. Ce lien est valable jusqu'au ${dt(d.expire_at)}.</p>`}
+    </form>
+    <div class="card"><h2>Contact</h2><p class="mut" style="margin:0">${esc(e.nom || "")}${e.telephone ? " · " + esc(e.telephone) : ""}${e.email ? ` · <a href="mailto:${esc(e.email)}">${esc(e.email)}</a>` : ""}</p></div>`;
+  const f = document.getElementById("mf");
+  if (locked) return;
+  let dec = "";
+  f.querySelectorAll("button[data-d]").forEach((b) => (b.onclick = () => (dec = b.dataset.d)));
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const er = f.querySelector(".er");
+    if (!f.elements.nom.value.trim()) { er.textContent = "Indiquez votre nom."; return; }
+    const avis = L.map((_, i) => ({ i, ok: f.elements["ok" + i].value === "" ? null : f.elements["ok" + i].value === "true", c: f.elements["c" + i].value.trim() })).filter((a) => a.ok !== null || a.c);
+    if (dec === "Validée" && avis.some((a) => a.ok === false)) { er.textContent = "Une ligne est marquée « À revoir » : choisissez « Valider avec réserves » ou « Envoyer mes commentaires »."; return; }
+    if (dec === "Refusée" && !f.elements.g.value.trim() && !avis.some((a) => a.c)) { er.textContent = "Indiquez le motif du refus dans un commentaire."; return; }
+    er.textContent = ""; f.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try { await rpc("moe_avis", { p_token: moeToken, p_nom: f.elements.nom.value.trim(), p_decision: dec, p_global: f.elements.g.value, p_avis: avis }); await showMoe(); }
+    catch (x) { er.textContent = x.message; f.querySelectorAll("button").forEach((b) => (b.disabled = false)); }
+  };
+}
+
+/* ---------- Offre de sous-traitance : p.html?o=<jeton> ---------- */
+async function showOffre() {
+  if (!/^[0-9a-f-]{36}$/i.test(offreToken)) return fail("Ce lien n'est pas valide.");
+  if (!CFG.url || /VOTRE/.test(CFG.url)) return fail("Le site n'est pas configuré.");
+  let o;
+  try { o = await rpc("offre_get", { p_token: offreToken }); } catch (e) { return fail(e.message); }
+  const e = o.entreprise || {};
+  root.innerHTML = `
+    <div class="card"><p class="mut" style="margin:0">${esc(e.nom || "")} recherche un sous-traitant</p><h1>${esc(o.titre)}</h1>
+      <p class="mut" style="margin:0">${[o.metier, o.lieu, o.duree ? "durée " + o.duree : "", o.date_debut ? "démarrage " + dt(o.date_debut) : "", o.budget_ht ? "budget indicatif " + eur(o.budget_ht) + " HT" : ""].filter(Boolean).map(esc).join(" · ")}</p>
+      ${o.description ? `<p style="white-space:pre-wrap;margin:12px 0 0">${esc(o.description)}</p>` : ""}${o.date_limite ? `<p class="mut" style="margin:10px 0 0">Candidatures jusqu'au ${dt(o.date_limite)}.</p>` : ""}</div>
+    <form class="card" id="cf"><h2>Votre candidature</h2>
+      <label style="display:block;margin-bottom:8px">Entreprise *<input name="nom" required maxlength="160" style="width:100%"></label>
+      <label style="display:block;margin-bottom:8px">SIRET<input name="siret" inputmode="numeric" maxlength="17" style="width:100%"></label>
+      <label style="display:block;margin-bottom:8px">Personne à contacter<input name="contact" maxlength="120" style="width:100%"></label>
+      <label style="display:block;margin-bottom:8px">Email *<input name="email" type="email" required maxlength="160" style="width:100%"></label>
+      <label style="display:block;margin-bottom:8px">Téléphone<input name="tel" type="tel" maxlength="30" style="width:100%"></label>
+      <label style="display:block;margin-bottom:8px">Métier<input name="metier" maxlength="80" style="width:100%" value="${esc(o.metier || "")}"></label>
+      <label style="display:block;margin-bottom:8px">Prix proposé (€ HT)<input name="prix" inputmode="decimal" style="width:100%"></label>
+      <label style="display:block;margin-bottom:8px">Délai d'intervention (jours)<input name="delai" inputmode="numeric" style="width:100%"></label>
+      <label style="display:block;margin-bottom:8px">Références de chantiers similaires<textarea name="refs" rows="3" maxlength="2000" style="width:100%"></textarea></label>
+      <label style="display:block;margin-bottom:8px">Message<textarea name="msg" rows="3" maxlength="3000" style="width:100%"></textarea></label>
+      <label class="chk" style="margin-bottom:6px"><input type="checkbox" name="ass"> J'ai une assurance décennale et RC professionnelle en cours de validité</label>
+      <label class="chk" style="margin-bottom:6px"><input type="checkbox" name="vig"> Je peux fournir une attestation de vigilance URSSAF à jour</label>
+      <div style="position:absolute;left:-9999px" aria-hidden="true"><input name="hp" tabindex="-1" autocomplete="off"></div>
+      <label class="chk" style="margin:10px 0"><input type="checkbox" name="rgpd"> J'accepte que ${esc(e.nom || "l'entreprise")} conserve ces informations pour traiter ma candidature. Ma réponse n'engage aucune des deux parties.</label>
+      <div class="row"><button class="btn" type="submit">Envoyer ma candidature</button></div><p class="er" role="alert"></p></form>`;
+  const f = document.getElementById("cf"), num = (v) => (String(v).trim() === "" ? null : Number(String(v).replace(/\s/g, "").replace(",", ".")));
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const er = f.querySelector(".er"); er.textContent = "";
+    const prix = num(f.elements.prix.value), delai = num(f.elements.delai.value);
+    if (prix !== null && !isFinite(prix)) { er.textContent = "Prix invalide."; return; }
+    f.querySelector("button").disabled = true;
+    try {
+      await rpc("offre_candidater", { p_token: offreToken, p_nom: f.elements.nom.value, p_siret: f.elements.siret.value, p_contact: f.elements.contact.value, p_email: f.elements.email.value, p_telephone: f.elements.tel.value, p_metier: f.elements.metier.value, p_prix: prix,
+        p_delai: delai === null || !isFinite(delai) ? null : Math.round(delai), p_refs: f.elements.refs.value, p_message: f.elements.msg.value, p_assurance: f.elements.ass.checked, p_vigilance: f.elements.vig.checked, p_rgpd: f.elements.rgpd.checked, p_hp: f.elements.hp.value });
+      root.innerHTML = `<div class="card c"><h1>Candidature envoyée</h1><p class="mut">Merci. ${esc(e.nom || "L'entreprise")} vous répondra si votre profil est retenu.</p></div>`;
+    } catch (x) { er.textContent = x.message; f.querySelector("button").disabled = false; }
+  };
+}
+
+moeToken ? showMoe() : offreToken ? showOffre() : pvToken ? showPv() : show();

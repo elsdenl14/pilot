@@ -148,7 +148,7 @@ async function docDetail(K, id) {
     ${K === "facture" && db.v7 && d.statut !== "Brouillon" ? `<dt>Facture électronique</dt><dd>${efChip(efOf(id))}</dd>` : ""}</dl>`;
   const partageHtml = p
     ? `<dl class="kv"><dt>Lien client</dt><dd><a href="${shareLink(p.token)}" target="_blank" rel="noopener">Ouvrir la page du client</a></dd>
-        <dt>Consultation</dt><dd>${p.vu_at ? "Ouvert le " + new Date(p.vu_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "Pas encore ouvert"}</dd>
+        <dt>Consultation</dt><dd>${p.vu_at ? "Ouvert le " + new Date(p.vu_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "Pas encore ouvert"}${p.nb_vues ? ` · ${p.nb_vues} consultation${p.nb_vues > 1 ? "s" : ""}` : ""}${p.revoque_at ? " · <b>lien révoqué</b>" : ""}</dd>
         ${K === "devis" ? `<dt>Réponse</dt><dd>${p.accepte_at ? `<span class="chip ok">Accepté</span> par ${esc(p.accepte_par || "")}${sigOf(id) ? " · signé électroniquement" : ""}` : p.refuse_at ? `<span class="chip dn">Refusé</span>` : "En attente"}</dd>` : ""}</dl>`
     : `<p class="mut" style="margin:0;padding:16px 18px">Pas encore envoyé en ligne. « ${K === "devis" ? "Envoyer au client" : "Envoyer au client"} » crée un lien que votre client ouvre sans compte${K === "devis" ? " pour accepter ou refuser le devis" : ""}.</p>`;
   const payHtml = K === "facture" && paiements.length
@@ -380,6 +380,8 @@ async function docShare(K, id) {
   toast("Préparation du lien…");
   const bytes = await docPdfBytes(K, id);
   let p = partageOf(id);
+  if (p && p.revoque_at) { await q(sb.from("partages").update({ revoque_at: null }).eq("token", p.token)); }
+  if (typeof ribRecent === "function" && K === "facture" && ribRecent().length) toast("Rappel : vos coordonnées bancaires ont été modifiées récemment. Vérifiez que l'IBAN de cette facture est le bon.", "dn");
   if (!p) p = await q(sb.from("partages").insert({ type: K, doc_id: id }).select("token").single());
   const path = `${uid}/${p.token}.pdf`;
   const up = await sb.storage.from("partages").upload(path, new Blob([bytes], { type: "application/pdf" }), { upsert: true, contentType: "application/pdf" });

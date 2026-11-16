@@ -64,6 +64,8 @@ function priorites() {
   if (typeof urssafPriorites === "function") urssafPriorites(add, t);
   if (typeof planPriorites === "function") planPriorites(add, t);
   if (typeof ressPriorites === "function") ressPriorites(add, t);
+  if (typeof stoPriorites === "function") stoPriorites(add, t);
+  if (typeof moePriorites === "function") moePriorites(add, t);
   for (const f of ouvertes()) {
     const d = daysBetween(t, f.echeance);
     if (d >= 0 && d <= 7)
@@ -223,7 +225,7 @@ V.chantiers = (r) => {
       go: `chantiers/${c.id}`, t: `${c.nom} ${c.client_nom} ${c.ville || ""}`,
       c: [`<strong>${esc(c.nom)}</strong><small>${esc(c.client_nom)}${c.ville ? " · " + esc(c.ville) : ""}</small>`,
         `<span class="num">${E(c.montant_marche)}</span>`, `<span class="num">${E(s.factureHT)}</span>`, `<span class="num">${E(s.couts)}</span>`,
-        `<span class="num ${s.marge < 0 ? "dn" : ""}">${s.factureHT || s.couts ? E(s.marge) : "-"}</span>`, chip(c.statut) + finChip(c)],
+        `<span class="num ${s.marge < 0 ? "dn" : ""}">${typeof permOk === "function" && !permOk("marges") ? "•••" : s.factureHT || s.couts ? E(s.marge) : "-"}</span>`, chip(c.statut) + (typeof permOk === "function" && !permOk("marges") ? "" : finChip(c))],
     };
   });
   const tabsHtml = tabs("chantiers", [["tous", "Tous"], ...CH_STATUTS.map((s) => [s, s])], cur);
@@ -243,17 +245,18 @@ function chantierDetail(id) {
       ["Marché", E(c.montant_marche), "montant convenu"],
       ["Facturé HT", E(s.factureHT), `${E(s.encaisse)} encaissés (TTC)`],
       ["Coûts HT", E(s.couts), `${deps.length} dépense${deps.length > 1 ? "s" : ""} rattachée${deps.length > 1 ? "s" : ""}`],
-      ["Marge estimée", s.factureHT || s.couts ? E(s.marge) : "-", "facturé - coûts", s.marge < 0 ? "dn" : ""],
+      typeof permOk === "function" && !permOk("marges") ? ["Marge estimée", "Réservé", "accès limité"] : ["Marge estimée", s.factureHT || s.couts ? E(s.marge) : "-", "facturé - coûts", s.marge < 0 ? "dn" : ""],
     ])}
     <div class="g2"><div>
-      ${card("Devis", docTable("devis", devis), "")}
-      ${card("Factures", docTable("factures", fact), "")}
+      ${typeof permOk === "function" && !permOk("ventes") ? "" : card("Devis", docTable("devis", devis), "") + card("Factures", docTable("factures", fact), "")}
       ${card("Dépenses et achats", tbl(["Fournisseur", "Date", { h: "HT", r: 1 }, "Statut"], deps.map((d) => ({ go: `depenses/${d.id}`, c: [`<strong>${esc(d.fournisseur)}</strong><small>${esc(d.categorie || d.type)}</small>`, D(d.date_depense), `<span class="num">${E2(d.montant_ht)}</span>`, chip(d.statut)] })), "Aucune dépense rattachée à ce chantier."), btn("Ajouter", "depNew", "", "chantier:" + id, "o sm w"))}
       ${achatsCard(c)}
     </div><div>
       ${typeof chPlanCard === "function" ? chPlanCard(id) : ""}
-      ${typeof chRentaCard === "function" ? chRentaCard(id) : ""}
+      ${typeof chRentaCard === "function" && (typeof permOk !== "function" || permOk("marges")) ? chRentaCard(id) : ""}
       ${typeof mkChantierCards === "function" ? mkChantierCards(id) : ""}
+      ${typeof stoChantierCard === "function" && (typeof permOk !== "function" || permOk("achats")) ? stoChantierCard(id) : ""}
+      ${typeof moeChantierCard === "function" && (typeof permOk !== "function" || permOk("ventes")) ? moeChantierCard(id) : ""}
       ${typeof pvChantierCard === "function" ? pvChantierCard(id) : ""}
       ${typeof ntCard === "function" ? ntCard("chantier", id) : ""}
       ${dcCard("chantier", id)}

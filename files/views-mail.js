@@ -7,7 +7,7 @@ const ML_VARS = [
   ["client", "Nom du client"], ["bonjour", "Formule d'appel"], ["numero", "N° du document"], ["montant", "Montant TTC"], ["reste", "Reste à payer"],
   ["date_doc", "Date du document"], ["echeance", "Échéance"], ["retard", "Jours de retard"], ["lien", "Lien client"], ["bloc_paiement", "Lien de paiement et RIB"],
   ["chantier", "Chantier"], ["entreprise", "Votre entreprise"], ["telephone", "Votre téléphone"], ["signature", "Signature (Cordialement…)"],
-  ["precedent_rappel", "Rappel précédent"], ["penalites", "Pénalités (clients pro)"],
+  ["precedent_rappel", "Rappel précédent"], ["chantier_txt", "Chantier (phrase)"], ["penalites", "Pénalités (clients pro)"],
 ];
 const ML_DEF = [
   { code: "devis_envoi", nom: "Envoi d'un devis", sujet: "Devis {numero} - {entreprise}",
@@ -26,6 +26,8 @@ const ML_DEF = [
     corps: "{bonjour}\n\nNous avons bien reçu votre règlement pour la facture {numero}. Nous vous en remercions.\n\n{signature}" },
   { code: "pv_envoi", nom: "Envoi d'un PV de réception", sujet: "Procès-verbal de réception {numero} - {chantier}",
     corps: "{bonjour}\n\nSuite à la réception des travaux du chantier « {chantier} », vous trouverez le procès-verbal {numero}.\nMerci de le consulter et de le signer en ligne : {lien}\n\n{signature}" },
+  { code: "bc_envoi", nom: "Envoi d'un bon de commande", sujet: "Bon de commande {numero} - {entreprise}",
+    corps: "{bonjour}\n\nVeuillez trouver notre bon de commande {numero} d'un montant de {montant} TTC{chantier_txt}.\nLivraison souhaitée : {echeance}.\n\nMerci de nous confirmer la réception de cette commande et la date de livraison.\n\n{signature}" },
   { code: "libre", nom: "Message libre", sujet: "", corps: "{bonjour}\n\n\n\n{signature}" },
 ];
 const mlTpl = (code) => {
@@ -43,7 +45,7 @@ function mlVars(o = {}) {
     reste, date_doc: D(d.date_emission || d.date_devis || d.date_reception), echeance: D(d.echeance), retard: d.echeance ? Math.max(0, daysBetween(d.echeance, today())) : "",
     lien: o.lien || "", bloc_paiement: o.bloc || "", chantier: ch?.nom || "", entreprise: e.nom || "", telephone: e.telephone || "",
     signature: `Cordialement,\n${e.nom || ""}${e.telephone ? "\n" + e.telephone : ""}`, precedent_rappel: o.precedent || "notre rappel",
-    penalites: o.penalites || "",
+    penalites: o.penalites || "", chantier_txt: ch?.nom ? ` pour le chantier « ${ch.nom} »` : "",
   };
 }
 const mlRender = (code, o) => { const t = mlTpl(code), v = mlVars(o); return { sujet: mlFill(t.sujet, v), corps: mlFill(t.corps, v) }; };

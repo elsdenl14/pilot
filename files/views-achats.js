@@ -79,6 +79,7 @@ const pbar = (p) =>
   `<div class="pbl"><div class="pb"><i class="${p > 100 ? "dn" : p >= 90 ? "wn" : ""}" style="width:${Math.min(p, 100)}%"></i></div><small>${p} %</small></div>`;
 
 function finCard(c) {
+  if (typeof permOk === "function" && !permOk("marges")) return "";
   const f = chFin(c);
   const head = btn("Définir le budget", "chantierBudget", c.id, "", "o sm w") + btn("Ajouter de la main-d'œuvre", "depMO", c.id, "", "o sm w");
   const alert = f.lv && c.statut !== "Terminé" ? `<div class="fin-alert ${f.lv}"><b>${finTitle(f)}</b><span>${esc(finDetail(f))}</span></div>` : "";
@@ -293,7 +294,7 @@ function fournisseurDetail(id) {
   dp.forEach((d) => { const k = d.chantier_nom || "Sans chantier"; byCh[k] = (byCh[k] || 0) + d.montant_ht; });
   const chRows = Object.entries(byCh).sort((a, b) => b[1] - a[1]);
   return page(esc(f.nom), esc(f.categorie || ""),
-    btn("Modifier", "fournisseurEdit", id, "", "o w") + btn("Nouvelle commande", "achatNew", id, "Commande", "w") + btn("Nouveau devis", "achatNew", id, "Devis", "o w") + btn("Supprimer", "fournisseurDel", id, "", "dn-o w"),
+    btn("Modifier", "fournisseurEdit", id, "", "o w") + (db.v11 ? btn("Bon de commande", "bcNew", id, "", "w") + btn("Commande simple", "achatNew", id, "Commande", "o w") : btn("Nouvelle commande", "achatNew", id, "Commande", "w")) + btn("Nouveau devis", "achatNew", id, "Devis", "o w") + btn("Supprimer", "fournisseurDel", id, "", "dn-o w"),
     `${strip([
       [`Dépensé en ${yr} (HT)`, E(sum(dp.filter((d) => String(d.date_depense).startsWith(yr)), (d) => d.montant_ht)), "factures et dépenses"],
       ["Total depuis le début (HT)", E(sum(dp, (d) => d.montant_ht)), `${dp.length} facture${dp.length > 1 ? "s" : ""}`],
@@ -304,7 +305,8 @@ function fournisseurDetail(id) {
       ${card("Historique", tbl(["Date", "Document", "Chantier", { h: "HT", r: 1 }, "Statut"],
         hist.map((h) => ({ act: h.act, id: h.id, c: [D(h.d), `<strong>${h.k}</strong><small>${esc(h.n)}</small>`, esc(h.ch || "-"), `<span class="num">${E2(h.ht)}</span>`, chip(h.s)] })), "Aucun historique pour ce fournisseur."))}
     </div><div>
-      ${card("Coordonnées", `<dl class="kv"><dt>Contact</dt><dd>${esc(f.contact || "-")}</dd><dt>Téléphone</dt><dd>${esc(f.telephone || "-")}</dd><dt>Email</dt><dd>${f.email ? `<a href="mailto:${esc(f.email)}">${esc(f.email)}</a>` : "-"}</dd><dt>Adresse</dt><dd>${esc(f.adresse || "-")}</dd><dt>Ville</dt><dd>${esc(f.ville || "-")}</dd><dt>Notes</dt><dd>${esc(f.notes || "-").replace(/\n/g, "<br>")}</dd></dl>`)}
+      ${card("Coordonnées", supCoordHtml(f))}
+      ${typeof supBcCard === "function" ? supBcCard(id) : ""}${typeof catSupCard === "function" ? catSupCard(id) : ""}
       ${card("Dépensé par chantier (HT)", chRows.length ? chRows.map(([k, v]) => `<div class="row"><span>${esc(k)}</span><span class="num">${E(v)}</span></div>`).join("") : `<p class="emp" style="padding:18px;margin:0;color:var(--mut)">Aucune dépense.</p>`)}
     </div></div>`,
     crumbs(["Fournisseurs", "fournisseurs"], [f.nom]));
@@ -322,12 +324,16 @@ function fournisseurForm(f, o = {}) {
     ${fld({ k: "email", l: "Email", t: "email", v: f?.email, r: 0, cls: "full" })}
     ${fld({ k: "adresse", l: "Adresse", v: f?.adresse, r: 0, cls: "full" })}
     ${fld({ k: "ville", l: "Code postal et ville", v: f?.ville, r: 0, cls: "full" })}
+    ${db.v11 ? supExtraFields(f) : ""}
     ${fld({ k: "notes", l: "Notes", t: "textarea", v: f?.notes, r: 0, cls: "full" })}</div>`;
   modal(f ? "Modifier le fournisseur" : "Nouveau fournisseur", body, {
     wide: true,
     onSubmit: async (v, api) => {
       const row = { nom: v.nom.trim(), categorie: v.categorie, delai_paiement_jours: Math.max(0, Math.round(parseNum(v.delai_paiement_jours))),
         contact: v.contact || null, telephone: v.telephone || null, email: v.email || null, adresse: v.adresse || null, ville: v.ville || null, notes: v.notes || null };
+      if (db.v11) Object.assign(row, supExtraRead(v));
+      const ribOk = f && db.v11 && typeof ribGuard === "function" ? await ribGuard("fournisseur", f.nom, f.iban, row.iban, ribNorm(f.bic) !== ribNorm(row.bic)) : {};
+      if (!ribOk) return;
       try {
         if (f) await q(sb.from("fournisseurs").update(row).eq("id", f.id));
         else await q(sb.from("fournisseurs").insert(row));
@@ -335,6 +341,7 @@ function fournisseurForm(f, o = {}) {
         if (e.code === "23505") throw new Error("Un fournisseur porte déjà ce nom.");
         throw e;
       }
+      if (ribOk.motif && typeof ribAnnotate === "function") await ribAnnotate("fournisseur", ribOk);
       api.close();
       toast(f ? "Fournisseur modifié." : "Fournisseur créé.", "ok");
       await refresh();

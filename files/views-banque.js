@@ -171,7 +171,7 @@ const bkDown = (l) => (l === "c" ? "p" : "s");
 function bkCtx() {
   const linkedPay = new Set(db.bankTx.filter((t) => t.paiement_id).map((t) => t.paiement_id));
   const linkedDep = new Set(db.bankTx.filter((t) => t.depense_id).map((t) => t.depense_id));
-  return { openF: ouvertes().filter((f) => f.reste > 0.005), pays: db.paiements.filter((p) => !linkedPay.has(p.id)), deps: db.depenses.filter((d) => !linkedDep.has(d.id)) };
+  return { openF: ouvertes().filter((f) => f.reste > 0.005), pays: db.paiements.filter((p) => !linkedPay.has(p.id)), deps: db.depenses.filter((d) => !linkedDep.has(d.id)), lots: (db.lots || []).filter((l) => l.statut === "Préparé") };
 }
 const bkFExact = (f, amt) => {
   if (Math.abs(amt - f.reste) < 0.005) return "solde";
@@ -207,6 +207,12 @@ function bkCands(tx, cx) {
     }
   } else {
     const amt = -tx.montant;
+    for (const l of cx.lots || []) {
+      if (Math.abs(l.montant_total - amt) > 0.005) continue;
+      const dd = Math.abs(daysBetween(l.date_execution, tx.date_op));
+      if (dd > 15) continue;
+      out.push({ type: "lot", l, s: 95 + (dd <= 3 ? 10 : 0), why: [`montant égal au lot ${l.reference} (${l.nb} facture${l.nb > 1 ? "s" : ""})`] });
+    }
     const exactD = cx.deps.filter((d) => d.statut === "À payer" && Math.abs(d.montant_ttc - amt) < 0.005);
     for (const d of cx.deps) {
       if (Math.abs(d.montant_ttc - amt) > 0.005) continue;
@@ -284,17 +290,10 @@ async function bkApply(tx, s, rest) {
   try {
     if (s.type === "facture") {
       const f = s.f, left = rest ? (rest[f.id] ?? f.reste) : f.reste;
-      const exc = r2(tx.montant - left);
-      if (exc > 0.005 && !db.v9) throw new Error(`Ce montant (${E2(tx.montant)}) dépasse le reste dû de la facture ${f.numero} (${E2(left)}).`);
-      const pay = await q(sb.from("paiements").insert({ facture_id: f.id, montant: exc > 0.005 ? left : tx.montant, date_paiement: tx.date_op, mode: bkMode(tx.libelle, false), reference: ("Banque · " + tx.libelle).slice(0, 120) }).select("id").single());
+      if (tx.montant > left + 0.005) throw new Error(`Ce montant (${E2(tx.montant)}) dépasse le reste dû de la facture ${f.numero} (${E2(left)}).`);
+      const pay = await q(sb.from("paiements").insert({ facture_id: f.id, montant: tx.montant, date_paiement: tx.date_op, mode: bkMode(tx.libelle, false), reference: ("Banque · " + tx.libelle).slice(0, 120) }).select("id").single());
       try { await bkLinkTx(tx.id, { statut: "Rapprochée", lien_type: "paiement", facture_id: f.id, paiement_id: pay.id }); }
       catch (e) { try { await q(sb.from("paiements").delete().eq("id", pay.id)); } catch (e2) {} throw e; }
-      if (exc > 0.005) {
-        try { await q(sb.from("client_credits").insert({ client_id: f.client_id, montant: exc, type: "Trop-perçu", facture_id: f.id, paiement_id: pay.id, date_op: tx.date_op, mode: "Virement", reference: ("Banque · " + tx.libelle).slice(0, 120), motif: `Excédent sur ${f.numero}` })); }
-        catch (e) { try { await q(sb.from("banque_transactions").update({ statut: "À rapprocher", lien_type: null, facture_id: null, paiement_id: null }).eq("id", tx.id)); await q(sb.from("paiements").delete().eq("id", pay.id)); } catch (e2) {} throw e; }
-        if (rest) rest[f.id] = 0;
-        return { msg: `Facture ${f.numero} soldée ; ${E2(exc)} d'excédent gardés en crédit pour ${f.client_nom} (trop-perçu).` };
-      }
       if (rest) rest[f.id] = r2(left - tx.montant);
       return { msg: left - tx.montant < 0.005 ? `Facture ${f.numero} marquée payée.` : `Paiement partiel enregistré sur ${f.numero} : il reste ${E2(left - tx.montant)} à encaisser.` };
     }
@@ -308,6 +307,14 @@ async function bkApply(tx, s, rest) {
       try { await bkLinkTx(tx.id, { statut: "Rapprochée", lien_type: "depense_payee", depense_id: d.id }); }
       catch (e) { try { await q(sb.from("depenses").update({ statut: "À payer", date_paiement: null, mode: null }).eq("id", d.id)); } catch (e2) {} throw e; }
       return { msg: `Dépense ${d.fournisseur} marquée payée.` };
+    }
+    if (s.type === "lot") {
+      const l = s.l, ds = db.depenses.filter((d) => d.lot_id === l.id);
+      for (const d of ds) await q(sb.from("depenses").update({ statut: "Payée", date_paiement: tx.date_op, mode: l.mode || "Virement" }).eq("id", d.id));
+      try { await bkLinkTx(tx.id, { statut: "Rapprochée", lien_type: "lot", lot_id: l.id }); }
+      catch (e) { for (const d of ds) { try { await q(sb.from("depenses").update({ statut: d.statut, date_paiement: d.date_paiement || null, mode: d.mode || null }).eq("id", d.id)); } catch (e2) {} } throw e; }
+      await q(sb.from("paiement_lots").update({ statut: "Exécuté", executed_at: new Date().toISOString() }).eq("id", l.id));
+      return { msg: `Lot ${l.reference} payé : ${ds.length} facture${ds.length > 1 ? "s" : ""} marquée${ds.length > 1 ? "s" : ""} payée${ds.length > 1 ? "s" : ""}.` };
     }
     if (s.type === "deplie") {
       await bkLinkTx(tx.id, { statut: "Rapprochée", lien_type: "depense_liee", depense_id: s.d.id });
@@ -350,15 +357,16 @@ async function bkUndo(id) {
   if (!guard()) return;
   const tx = byId(db.bankTx, id);
   if (!tx) return;
-  const clear = { statut: "À rapprocher", lien_type: null, facture_id: null, paiement_id: null, depense_id: null };
+  const clear = { statut: "À rapprocher", lien_type: null, facture_id: null, paiement_id: null, depense_id: null, ...(db.v11 ? { lot_id: null } : {}) };
   if (tx.statut === "Rapprochée") {
-    const txt = { paiement: "Le paiement créé sera supprimé et la facture redeviendra impayée (ou partiellement payée).", depense_payee: "La dépense repassera en « À payer ».", paiement_lie: "Le paiement déjà enregistré est conservé.", depense_liee: "La dépense est conservée.", depense_creee: "La dépense créée est conservée : supprimez-la à la main si besoin." }[tx.lien_type] || "";
+    const txt = { paiement: "Le paiement créé sera supprimé et la facture redeviendra impayée (ou partiellement payée).", depense_payee: "La dépense repassera en « À payer ».", lot: "Les factures du lot repasseront en « À payer » et le lot en « Préparé ».", paiement_lie: "Le paiement déjà enregistré est conservé.", depense_liee: "La dépense est conservée.", depense_creee: "La dépense créée est conservée : supprimez-la à la main si besoin." }[tx.lien_type] || "";
     if (!confirm(`Annuler ce rapprochement ?\n\n${txt}`)) return;
-    if (tx.lien_type === "paiement" && tx.paiement_id) {
-      if (db.v9 && typeof rgUnwindPay === "function") { try { await rgUnwindPay(tx.paiement_id, ["Trop-perçu"]); } catch (e) { return toast(friendly(e), "dn"); } }
-      await q(sb.from("paiements").delete().eq("id", tx.paiement_id));
-    }
+    if (tx.lien_type === "paiement" && tx.paiement_id) await q(sb.from("paiements").delete().eq("id", tx.paiement_id));
     if (tx.lien_type === "depense_payee" && tx.depense_id) await q(sb.from("depenses").update({ statut: "À payer", date_paiement: null, mode: null }).eq("id", tx.depense_id));
+    if (tx.lien_type === "lot" && tx.lot_id) {
+      for (const d of db.depenses.filter((x) => x.lot_id === tx.lot_id)) await q(sb.from("depenses").update({ statut: "À payer", date_paiement: null, mode: null }).eq("id", d.id));
+      await q(sb.from("paiement_lots").update({ statut: "Préparé", executed_at: null }).eq("id", tx.lot_id));
+    }
   }
   await q(sb.from("banque_transactions").update(clear).eq("id", id));
   toast("Opération remise à rapprocher.");
@@ -542,6 +550,7 @@ async function bkAccDel(id) {
 function bkLinkText(t) {
   const f = t.facture_id ? byId(db.factures, t.facture_id) : null, d = t.depense_id ? byId(db.depenses, t.depense_id) : null;
   if (t.statut === "Ignorée") return `<span class="mut">Ignorée</span>`;
+  if (t.lien_type === "lot") { const l = byId(db.lots || [], t.lot_id); return l ? `Lot de règlements <b>${esc(l.reference)}</b> · ${l.nb} facture${l.nb > 1 ? "s" : ""}` : `<span class="mut">Lot supprimé</span>`; }
   if (f) return `Facture <a href="#/factures/${f.id}">${esc(f.numero)}</a> · ${esc(f.client_nom)}`;
   if (d) return `Dépense <a href="#/depenses/${d.id}">${esc(d.fournisseur)}</a>`;
   return `<span class="mut">${t.lien_type === "paiement" || t.lien_type === "paiement_lie" ? "Paiement (facture supprimée)" : "Élément supprimé"}</span>`;
@@ -558,10 +567,11 @@ function bkSugCell(t) {
   if (s.type === "facture") head = `→ Facture <b>${esc(s.f.numero)}</b> · ${esc(s.f.client_nom)}<small>reste dû ${E2(s.f.reste)}</small>`;
   else if (s.type === "lie") head = `→ Paiement déjà saisi (${esc(s.p.facture_numero)}) · ${esc(s.p.client_nom)}<small>${D(s.p.date_paiement)}</small>`;
   else if (s.type === "dep") head = `→ Dépense <b>${esc(s.d.fournisseur)}</b>${s.d.reference ? " · " + esc(s.d.reference) : ""}<small>à payer · ${E2(s.d.montant_ttc)}</small>`;
+  else if (s.type === "lot") head = `→ Lot de règlements <b>${esc(s.l.reference)}</b><small>${s.l.nb} facture${s.l.nb > 1 ? "s" : ""} · ${E2(s.l.montant_total)} · virement du ${D(s.l.date_execution)}</small>`;
   else head = `→ Dépense déjà payée <b>${esc(s.d.fournisseur)}</b><small>${E2(s.d.montant_ttc)} · ${D(s.d.date_paiement || s.d.date_depense)}</small>`;
   return `<div class="bksug">${head}<small><span class="chip ${cls}">${lbl}</span> ${esc(s.why.join(" · "))}${s.alts ? ` · ${s.alts} autre${s.alts > 1 ? "s" : ""} possibilité${s.alts > 1 ? "s" : ""}` : ""}</small></div>`;
 }
-const BK_VERB = { facture: "Rapprocher", lie: "Lier", dep: "Marquer payée", deplie: "Lier" };
+const BK_VERB = { facture: "Rapprocher", lie: "Lier", dep: "Marquer payée", deplie: "Lier", lot: "Marquer le lot payé" };
 
 function banqueTab(t) {
   const st = bkSt();

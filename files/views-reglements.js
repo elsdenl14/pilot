@@ -472,6 +472,8 @@ function rgRibForm(r) {
     onSubmit: async (v, api) => {
       const iban = rgIbanClean(v.iban);
       if (!rgIbanOk(iban)) throw new Error("Cet IBAN semble incorrect (clé de contrôle invalide). Vérifiez-le caractère par caractère.");
+      const ribOk = r && typeof ribGuard === "function" ? await ribGuard("rib", v.libelle || r.libelle, r.iban, iban) : {};
+      if (!ribOk) return;
       const def = v.par_defaut === "1" && v.actif === "1";
       const row = { libelle: v.libelle.trim(), banque: v.banque || null, titulaire: v.titulaire || null, iban, bic: (v.bic || "").replace(/\s/g, "").toUpperCase() || null, actif: v.actif === "1" };
       if (def) await q(sb.from("ribs").update({ par_defaut: false }).eq("par_defaut", true));
@@ -479,6 +481,7 @@ function rgRibForm(r) {
       if (r) saved = await q(sb.from("ribs").update({ ...row, par_defaut: def ? true : (r.par_defaut && !def ? false : r.par_defaut) }).eq("id", r.id).select("*").single());
       else saved = await q(sb.from("ribs").insert({ ...row, par_defaut: def }).select("*").single());
       await rgSyncDefault();
+      if (ribOk.motif && typeof ribAnnotate === "function") await ribAnnotate("rib", ribOk);
       api.close(); toast("RIB enregistré.", "ok"); await refresh();
     },
   });

@@ -466,3 +466,21 @@ tr.lr-img td{padding:8px}tr.lr-img input[type=text]{width:100%}
 .afb{display:block;border-radius:5px;padding:1px 5px;margin-bottom:2px;font-size:11.5px;background:rgba(31,79,216,.14);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .afb.abs{background:rgba(245,158,11,.25)}.afb.indispo{background:rgba(120,120,120,.28)}.afb.loc{background:rgba(24,121,78,.2)}
 .phg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:14px 18px}.phg figure{margin:0;cursor:pointer}.phg img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:var(--bg2,#eee)}.phg figcaption{font-size:12px;color:var(--mut);margin-top:3px}
+
+/* v16 : onglets internes, accueil personnalisable, alerte RIB, permissions */
+.itabs { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: -4px 0 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.it-l { display: flex; gap: 2px; align-items: flex-end; flex-wrap: wrap; min-width: 0; }
+.it { display: inline-flex; align-items: center; border: 1px solid var(--line); border-bottom: 0; border-radius: 7px 7px 0 0; background: var(--bg2, transparent); max-width: 200px; }
+.it.on { background: var(--card, #fff); font-weight: 600; box-shadow: 0 2px 0 var(--card, #fff); }
+.it button { font: inherit; color: inherit; background: none; border: 0; padding: 6px 10px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+.it button.x { padding: 6px 8px 6px 0; opacity: .6; } .it button.x:hover { opacity: 1; }
+.it-n { font: inherit; background: none; border: 0; padding: 4px 10px; cursor: pointer; font-size: 18px; color: var(--mut); }
+.it-r { font: inherit; font-size: 12.5px; background: none; border: 0; color: var(--mut); cursor: pointer; padding: 4px 6px; }
+.it-r.on { color: var(--wn); font-weight: 600; }
+.acc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; margin-top: 16px; }
+.acc-grid .card { margin: 0; }
+@media (max-width: 900px) { .acc-grid { grid-template-columns: 1fr; } }
+.acc-it { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.acc-it label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+.ribwarn { background: var(--wnb, #fff4e0); border: 1px solid var(--wn, #b26a00); border-radius: 8px; }
+.nomarge .sx-marge { display: none !important; }
