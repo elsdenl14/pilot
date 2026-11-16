@@ -1,11 +1,27 @@
---- base/index.html	2026-11-15 02:01:00.373307939 +0000
-+++ out15/index.html	2026-11-15 02:10:22.964362443 +0000
-@@ -67,6 +67,8 @@
-     <script src="views-chiffrage.js"></script>
-     <script src="views-marches.js"></script>
+--- ../../full/pilot-main/files/index.html	2026-11-16 02:05:45.000000000 +0000
++++ ../../ia/src/index.html	2026-11-16 19:34:14.931828826 +0000
+@@ -16,8 +16,13 @@
+       <main>
+         <header class="top">
+           <span class="ro-badge" id="robadge" hidden>Lecture seule · dossier comptable</span>
++          <button class="cmdbtn" id="cmdbtn" aria-label="Rechercher ou aller à une page" title="Rechercher (Ctrl+K)"></button>
+           <span class="sp"></span>
+           <div class="pw">
++            <button class="btn sm newbtn" id="newbtn" aria-haspopup="true" aria-expanded="false">+ Nouveau</button>
++            <div id="newpop" class="pop sm" hidden></div>
++          </div>
++          <div class="pw">
+             <button class="ib" id="bell" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" title="Notifications"></button>
+             <div id="notifpop" class="pop" hidden></div>
+           </div>
+@@ -69,6 +74,10 @@
      <script src="views-btp.js"></script>
-+    <script src="views-equipes.js"></script>
-+    <script src="views-stocks.js"></script>
+     <script src="views-equipes.js"></script>
+     <script src="views-stocks.js"></script>
++    <script src="views-securite.js"></script>
++    <script src="views-soustraitance.js"></script>
++    <script src="views-moe.js"></script>
++    <script src="nav.js"></script>
      <script src="app.js"></script>
    </body>
  </html>

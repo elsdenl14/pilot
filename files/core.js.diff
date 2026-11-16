@@ -1,38 +1,89 @@
---- base/core.js	2026-11-15 02:01:00.373149800 +0000
-+++ out15/core.js	2026-11-15 02:10:22.963791819 +0000
-@@ -115,6 +115,7 @@
-   try { if (typeof loadV12 === "function") await loadV12(); } catch (e) { db.v12 = false; console.warn(e); }
+--- ../../full/pilot-main/files/core.js	2026-11-16 02:05:45.000000000 +0000
++++ ../../ia/src/core.js	2026-11-16 19:34:14.929572899 +0000
+@@ -116,6 +116,7 @@
    try { if (typeof loadV13 === "function") await loadV13(); } catch (e) { db.v13 = false; console.warn(e); }
    try { if (typeof loadV14 === "function") await loadV14(); } catch (e) { db.v14 = false; db.v14err = e?.message || String(e); console.warn(e); }
-+  try { if (typeof loadV15 === "function") await loadV15(); } catch (e) { db.v15 = false; db.v15err = e?.message || String(e); console.warn(e); }
+   try { if (typeof loadV15 === "function") await loadV15(); } catch (e) { db.v15 = false; db.v15err = e?.message || String(e); console.warn(e); }
++  try { if (typeof loadV16 === "function") await loadV16(); } catch (e) { db.v16 = false; db.v16err = e?.message || String(e); console.warn(e); }
    try { if (typeof loadV10 === "function") await loadV10(); } catch (e) { db.v10 = false; console.warn(e); }
    try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }
  }
-@@ -169,6 +170,13 @@
-   efacture: "M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h4 M15 15l2 2 3-3",
-   ouvrages: "M4 5h6v14H4z M14 5h6v14h-6z M6 9h2 M16 9h2",
-   documents: "M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z",
-+  equipes: "M9 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7z M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6 M17 8h4 M19 6v4",
-+  pointages: "M12 21a9 9 0 100-18 9 9 0 000 18z M12 7v5l3 2 M8 3L5 5 M16 3l3 2",
-+  affectations: "M4 5h16v15H4z M4 10h16 M8 14h4 M14 14h2 M8 17h2",
-+  rapports: "M6 3h9l4 4v14H6z M9 12h7 M9 16h5 M9 8h3",
-+  stocks: "M3 8l9-5 9 5v8l-9 5-9-5z M3 8l9 5 9-5 M12 13v8",
-+  dispo: "M14 6l4 4-9 9H5v-4z M3 21h18",
-+  rapprochement: "M5 4h9l3 3v13H5z M8 10h6 M8 14h6 M17 17l2 2 3-3",
- };
+@@ -181,40 +182,6 @@
  const svg = (p, c = "") =>
    `<svg class="${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${p}"/></svg>`;
-@@ -192,6 +200,13 @@
-   ["pv", "PV de réception", null],
-   ["ouvrages", "Bibliothèque", null],
-   ["documents", "Documents", null],
-+  ["equipes", "Équipes et salariés", "Terrain et stocks"],
-+  ["pointages", "Pointages et paie", null],
-+  ["affectations", "Affectations", null],
-+  ["rapports", "Rapports et photos", null],
-+  ["stocks", "Stocks", null],
-+  ["dispo", "Disponibilité matériel", null],
-+  ["rapprochement", "Rapprochement achats", null],
-   ["paiements", "Paiements", "Finances"],
-   ["compta", "Comptabilité", null],
-   ["analyses", "Analyses", "Pilotage"],
+ 
+-const NAV = [
+-  ["home", "Accueil", null],
+-  ["chantiers", "Chantiers", "Activité"],
+-  ["planning", "Planning", null],
+-  ["temps", "Temps passés", null],
+-  ["soustraitants", "Sous-traitants", null],
+-  ["materiel", "Matériel", null],
+-  ["clients", "Clients", null],
+-  ["achats", "Achats", null],
+-  ["fournisseurs", "Fournisseurs", null],
+-  ["devis", "Devis", null],
+-  ["marches", "Marchés et analyses", null],
+-  ["factures", "Factures", null],
+-  ["efacture", "Facture électronique", null],
+-  ["mails", "Messagerie", null],
+-  ["notes", "Notes", null],
+-  ["pv", "PV de réception", null],
+-  ["ouvrages", "Bibliothèque", null],
+-  ["documents", "Documents", null],
+-  ["equipes", "Équipes et salariés", "Terrain et stocks"],
+-  ["pointages", "Pointages et paie", null],
+-  ["affectations", "Affectations", null],
+-  ["rapports", "Rapports et photos", null],
+-  ["stocks", "Stocks", null],
+-  ["dispo", "Disponibilité matériel", null],
+-  ["rapprochement", "Rapprochement achats", null],
+-  ["paiements", "Paiements", "Finances"],
+-  ["compta", "Comptabilité", null],
+-  ["analyses", "Analyses", "Pilotage"],
+-  ["rentabilite", "Rentabilité", null],
+-  ["objectifs", "Objectifs", null],
+-  ["tresorerie", "Trésorerie prévue", null],
+-];
+-
+ /* ===================== Routage (#/page/id) ===================== */
+ const V = {}; // vues : V.nom({arg, qs}) -> html | { html, after }
+ const ST = { tab: {}, period: "12", year: new Date().getFullYear(), editing: false };
+@@ -235,17 +202,17 @@
+   const my = ++rid;
+   const r = parseHash();
+   if (!V[r.name]) r.name = "home";
+-  $$(".nav").forEach((n) => n.setAttribute("aria-current", n.dataset.go === (r.name === "bc" ? "achats" : r.name) ? "page" : "false"));
++  navMark();
+   ST.editing = false;
+   let out;
+   try {
+-    out = await V[r.name](r);
++    out = typeof permBlocked === "function" && permBlocked(r.name) ? permDenied() : await V[r.name](r);
+   } catch (e) {
+     console.error(e);
+     out = `<div class="empty"><h2>Une erreur est survenue</h2><p>${esc(friendly(e))}</p><button class="btn" data-go="home">Retour à l'accueil</button></div>`;
+   }
+   if (my !== rid) return;
+-  $("#v").innerHTML = out.html ?? out;
++  $("#v").innerHTML = (r.name === "home" ? "" : navSubbar(r.name)) + (out.html ?? out);
+   const key = location.hash;
+   if (!keepScroll && key !== lastKey) window.scrollTo(0, 0);
+   lastKey = key;
+@@ -255,6 +222,7 @@
+     $$("tbody tr[data-t]").forEach((r) => (r.hidden = !r.dataset.t.includes(t)));
+   };
+   out.after?.();
++  try { if (typeof tabsAfterRender === "function") tabsAfterRender(); } catch (e) { console.warn(e); }
+ }
+ // Recharge les données puis redessine (sans perdre le défilement)
+ async function refresh() {
+@@ -470,6 +438,8 @@
+     try { if (typeof cxHandleReturn === "function") await cxHandleReturn(); } catch (e) { console.warn("retour banque", e); }
+     $("#au")?.remove();
+     renderBell();
++    try { if (typeof applyRole === "function") applyRole(); } catch (e) { console.warn(e); }
++    buildSide();
+     if (!location.hash) location.hash = "#/";
+     await render();
+     subscribeNotifs();
