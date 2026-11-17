@@ -25,14 +25,24 @@ const MN = ["Janv", "Fév", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept
 const MNL = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
 const _scripts = {};
+// Si le dossier vendor/ n'est pas déployé avec le site, on se rabat sur un CDN (même version) au lieu d'échouer.
+const CDN_FALLBACK = {
+  "vendor/pdf-lib.min.js": "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js",
+  "vendor/jszip.min.js": "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
+  "vendor/xlsx.full.min.js": "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+};
+const _tag = (url) => new Promise((res, rej) => {
+  const s = document.createElement("script");
+  s.src = url;
+  s.onload = res;
+  s.onerror = () => { s.remove(); rej(new Error("Impossible de charger " + url)); };
+  document.head.appendChild(s);
+});
 const loadScript = (url) =>
-  (_scripts[url] ||= new Promise((res, rej) => {
-    const s = document.createElement("script");
-    s.src = url;
-    s.onload = res;
-    s.onerror = () => rej(new Error("Impossible de charger " + url));
-    document.head.appendChild(s);
-  }));
+  (_scripts[url] ||= _tag(url).catch((e) => {
+    if (!CDN_FALLBACK[url]) throw e;
+    return _tag(CDN_FALLBACK[url]).catch(() => { throw new Error(`Impossible de charger ${url}. Vérifiez que le dossier « vendor » est bien publié avec le site.`); });
+  }).catch((e) => { delete _scripts[url]; throw e; }));
 
 const LIBS = {
   pdflib: "vendor/pdf-lib.min.js",

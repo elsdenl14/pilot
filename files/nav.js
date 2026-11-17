@@ -31,7 +31,7 @@ const DOMAINS = [
     ["ouvrages", "Bibliothèque d'ouvrages", "prix catalogue bordereau"], ["liens", "Liens partagés", "suivi consultation"], ["moe", "Maîtrise d'œuvre", "architecte moe"],
   ] },
   { id: "chantiers", label: "Chantiers", icon: "d_chantiers", items: [
-    ["chantiers", "Chantiers", "projets"], ["planning", "Planning", "calendrier"], ["temps", "Temps passés", "heures"],
+    ["chantiers", "Chantiers", "projets"], ["journal", "Journal de chantier", "carnet de bord météo photos rapport quotidien"], ["planning", "Planning", "calendrier"], ["temps", "Temps passés", "heures"],
     ["pv", "PV de réception", "réception réserves"], ["notes", "Notes", "carnet"],
   ] },
   { id: "achats", label: "Achats", icon: "achats", items: [
@@ -49,7 +49,7 @@ const DOMAINS = [
     ["paiements", "Paiements", "encaissements banque"], ["tresorerie", "Trésorerie prévue", "prévisionnel"], ["compta", "Comptabilité", "export fec tva"],
   ] },
   { id: "pilotage", label: "Pilotage", icon: "d_pilotage", items: [
-    ["analyses", "Analyses", "statistiques"], ["rentabilite", "Rentabilité", "marges"], ["objectifs", "Objectifs", "budget"],
+    ["tbchantiers", "Tableau de bord chantiers", "budget marge heures alertes rentabilité"], ["analyses", "Analyses", "statistiques"], ["rentabilite", "Rentabilité", "marges"], ["objectifs", "Objectifs", "budget"],
   ] },
   { id: "documents", label: "Documents et échanges", icon: "d_documents", items: [
     ["documents", "Documents", "fichiers pièces"], ["mails", "Messagerie", "emails gmail"],

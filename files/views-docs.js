@@ -40,6 +40,22 @@ function docTable(K, list) {
         D(d[k.df]), `<span class="num">${E2(d.montant_ttc)}</span>`, chip(docStatut(d, K))] })),
     `Aucun ${k.label.toLowerCase()}.`);
 }
+/* ---------- Tri des listes ---------- */
+const DOC_SORTS = [
+  ["crea_desc", "Création : plus récent d'abord"], ["crea_asc", "Création : plus ancien d'abord"],
+  ["date_desc", "Date du document : récente"], ["date_asc", "Date du document : ancienne"],
+  ["nom_asc", "Client : A → Z"], ["nom_desc", "Client : Z → A"],
+  ["num_asc", "Numéro : croissant"], ["num_desc", "Numéro : décroissant"],
+  ["mt_desc", "Montant : du plus élevé"], ["mt_asc", "Montant : du plus bas"],
+];
+const docSortOf = (K) => ST.docSort?.[K] || "crea_desc";
+function docSortList(K, list) {
+  const k = KD[K], [f, dir] = docSortOf(K).split("_"), m = dir === "asc" ? 1 : -1, df = (x) => String(x[k.df] || "");
+  const key = { crea: (x) => String(x.created_at || ""), date: df, nom: (x) => String(x.client_nom || "").toLowerCase(), num: (x) => String(x.numero || ""), mt: (x) => Number(x.montant_ttc) || 0 }[f];
+  return [...list].sort((a, b) => { const A = key(a), B = key(b); return (typeof A === "number" ? A - B : A.localeCompare(B, "fr", { numeric: true })) * m || String(b.created_at || "").localeCompare(String(a.created_at || "")); });
+}
+const dtCrea = (v) => { if (!v) return "-"; const d = new Date(v); return isNaN(d) ? "-" : `${D(localDay(d))}<small>${pad2(d.getHours())}h${pad2(d.getMinutes())}</small>`; };
+
 function docList(K, r) {
   const k = KD[K];
   if (r.arg) return docDetail(K, r.arg);
@@ -47,21 +63,22 @@ function docList(K, r) {
     ? [["tous", "Tous"], ["Brouillon", "Brouillons"], ["Envoyé", "Envoyés"], ["Accepté", "Acceptés"], ["Refusé", "Refusés"]]
     : [["tous", "Toutes"], ["Brouillon", "Brouillons"], ["ouv", "À encaisser"], ["En retard", "En retard"], ["Payée", "Payées"], ...(db.v8 ? [["Avoir", "Avoirs"]] : [])];
   const cur = ST.tab[k.list] || "tous";
-  const list = db[k.list].filter((d) => cur === "tous" || (cur === "ouv" ? ["Envoyée", "Partiellement payée"].includes(d.statut) && d.reste > 0.005 : docStatut(d, K) === cur));
+  const list = docSortList(K, db[k.list]).filter((d) => cur === "tous" || (cur === "ouv" ? ["Envoyée", "Partiellement payée"].includes(d.statut) && d.reste > 0.005 : docStatut(d, K) === cur));
   const total = sum(list, (d) => d.montant_ttc);
   const rows = list.map((d) => ({ go: `${k.route}/${d.id}`, t: `${d.numero || ""} ${d.client_nom} ${d.chantier_nom || ""}`,
     c: [`<strong>${esc(docNum(d, K))}</strong>${K === "facture" ? fxTag(d) : ""}`, `${esc(d.client_nom)}${d.chantier_nom ? `<small>${esc(d.chantier_nom)}</small>` : ""}`,
       D(K === "devis" ? d.date_devis : d.statut === "Brouillon" ? d.date_emission : d.echeance),
+      dtCrea(d.created_at),
       `<span class="num">${E2(d.montant_ttc)}</span>`,
       K === "facture" && d.reste > 0 && d.statut !== "Brouillon" ? `<span class="num ${d.statut_affiche === "En retard" ? "dn" : ""}">${E2(d.reste)}</span>` : K === "facture" ? "" : null,
       chip(docStatut(d, K))].filter((x) => x !== null) }));
   const cols = K === "devis"
-    ? [k.label, "Client", "Date", { h: "Montant TTC", r: 1 }, "Statut"]
-    : [k.label, "Client", "Échéance", { h: "Montant TTC", r: 1 }, { h: "Reste dû", r: 1 }, "Statut"];
+    ? [k.label, "Client", "Date", "Créé le", { h: "Montant TTC", r: 1 }, "Statut"]
+    : [k.label, "Client", "Échéance", "Créé le", { h: "Montant TTC", r: 1 }, { h: "Reste dû", r: 1 }, "Statut"];
   return page(K === "devis" ? "Devis" : "Factures",
     K === "devis" ? "Créer, envoyer et suivre vos propositions commerciales." : "Émettre, envoyer et suivre vos factures jusqu'au paiement.",
     btn(K === "devis" ? "Nouveau devis" : "Nouvelle facture", K === "devis" ? "devisNew" : "factureNew", "", "", "w"),
-    (K === "facture" ? fxPendingCard() : "") + tabs(k.list, tabsDef, cur) + searchBar("Rechercher un numéro, un client, un chantier…", `${list.length} document${list.length > 1 ? "s" : ""} · ${E(total)} TTC`) +
+    (K === "facture" ? fxPendingCard() : "") + tabs(k.list, tabsDef, cur) + `<div class="sortbar">` + searchBar("Rechercher un numéro, un client, un chantier…", `${list.length} document${list.length > 1 ? "s" : ""} · ${E(total)} TTC`) + `<label class="sortsel"><span>Trier par</span><select data-chg="docSort${K === "devis" ? "Devis" : "Facture"}" aria-label="Trier">${DOC_SORTS.map(([v, l]) => `<option value="${v}"${v === docSortOf(K) ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>` +
       card("", tbl(cols, rows, K === "devis" ? "Aucun devis. Créez le premier avec le bouton « Nouveau devis »." : "Aucune facture. Transformez un devis accepté en facture ou créez-en une.")));
 }
 V.devis = (r) => docList("devis", r);
@@ -142,6 +159,7 @@ async function docDetail(K, id) {
     <dt>Client</dt><dd><a href="#/clients/${d.client_id}">${esc(d.client_nom)}</a></dd>
     ${d.chantier_nom ? `<dt>Chantier</dt><dd><a href="#/chantiers/${d.chantier_id}">${esc(d.chantier_nom)}</a></dd>` : ""}
     <dt>${K === "devis" ? "Date" : "Émission"}</dt><dd>${D(d[k.df])}</dd>
+    <dt>Créé le</dt><dd>${dtCrea(d.created_at).replace("<small>", " · ").replace("</small>", "")}</dd>
     ${K === "facture" ? `<dt>Échéance</dt><dd>${D(d.echeance)}</dd>` : `<dt>Validité</dt><dd>${d.validite_jours} jours</dd>`}
     ${K === "devis" && db.v13 ? cxDetailMarge(lignes) : ""}
     ${dv ? `<dt>Devis d'origine</dt><dd><a href="#/devis/${dv.id}">${esc(dv.numero)}</a></dd>` : ""}
@@ -439,6 +457,8 @@ async function docRelance(K, id) {
 
 /* ---------- Actions sur les documents ---------- */
 const docActions = {
+  docSortDevis: (v) => { (ST.docSort ||= {}).devis = v; render(true); },
+  docSortFacture: (v) => { (ST.docSort ||= {}).facture = v; render(true); },
   devisNew: (id, arg) => docForm("devis", null, { client: arg?.startsWith("client:") ? arg.slice(7) : "", chantier: arg?.startsWith("chantier:") ? arg.slice(9) : "" }),
   factureNew: (id, arg) => docForm("facture", null, { client: arg?.startsWith("client:") ? arg.slice(7) : "", chantier: arg?.startsWith("chantier:") ? arg.slice(9) : "" }),
   devisEdit: (id) => docForm("devis", byId(db.devis, id)),

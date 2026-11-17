@@ -130,7 +130,8 @@ function budgetForm(c) {
     ${fld({ k: "materiaux", l: "Matériaux", t: "number", v: num(b.materiaux), r: 0 })}
     ${fld({ k: "main_oeuvre", l: "Main-d'œuvre", t: "number", v: num(b.main_oeuvre), r: 0 })}
     ${fld({ k: "sous_traitance", l: "Sous-traitance", t: "number", v: num(b.sous_traitance), r: 0 })}
-    <label class="fl"><span>Marge prévue</span><input type="text" id="f_mp" readonly></label></div>`;
+    <label class="fl"><span>Marge prévue</span><input type="text" id="f_mp" readonly></label>
+    ${fld({ k: "heures_prevues", l: "Heures prévues (main-d'œuvre)", t: "number", v: num(b.heures_prevues), r: 0, cls: "full", hint: "Comparées aux heures réellement pointées dans le tableau de bord du chantier." })}</div>`;
   modal(`Budget : ${esc(c.nom)}`, body, {
     onMount: (m) => {
       const accepte = sum(db.devis.filter((d) => d.chantier_id === c.id && d.statut === "Accepté"), (d) => d.montant_ht);
@@ -143,7 +144,7 @@ function budgetForm(c) {
       upd();
     },
     onSubmit: async (v, api) => {
-      const row = { chantier_id: c.id, materiaux: parseNum(v.materiaux), main_oeuvre: parseNum(v.main_oeuvre), sous_traitance: parseNum(v.sous_traitance), updated_at: new Date().toISOString() };
+      const row = { chantier_id: c.id, materiaux: parseNum(v.materiaux), main_oeuvre: parseNum(v.main_oeuvre), sous_traitance: parseNum(v.sous_traitance), updated_at: new Date().toISOString(), ...(db.v17 ? { heures_prevues: parseNum(v.heures_prevues) } : {}) };
       if (row.materiaux < 0 || row.main_oeuvre < 0 || row.sous_traitance < 0) throw new Error("Les montants ne peuvent pas être négatifs.");
       await q(sb.from("chantiers").update({ montant_marche: parseNum(v.montant_marche) }).eq("id", c.id));
       await q(sb.from("chantier_budgets").upsert(row, { onConflict: "chantier_id" }));

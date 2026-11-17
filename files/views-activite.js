@@ -241,7 +241,7 @@ function chantierDetail(id) {
   const devis = db.devis.filter((d) => d.chantier_id === id), fact = db.factures.filter((f) => f.chantier_id === id), deps = db.depenses.filter((d) => d.chantier_id === id);
   return page(`${esc(c.nom)} ${chip(c.statut)}`, `${esc(c.client_nom)}${c.ville ? " · " + esc(c.ville) : ""}`,
     btn("Modifier", "chantierEdit", id, "", "o w") + btn("Nouveau devis", "devisNew", "", "chantier:" + id, "w") + btn("Nouvelle facture", "factureNew", "", "chantier:" + id, "o w") + btn("Supprimer", "chantierDel", id, "", "dn-o w"),
-    `${db.v5 ? finCard(c) : strip([
+    `${typeof chDashHtml === "function" ? chDashHtml(c) : ""}${db.v5 ? finCard(c) : strip([
       ["Marché", E(c.montant_marche), "montant convenu"],
       ["Facturé HT", E(s.factureHT), `${E(s.encaisse)} encaissés (TTC)`],
       ["Coûts HT", E(s.couts), `${deps.length} dépense${deps.length > 1 ? "s" : ""} rattachée${deps.length > 1 ? "s" : ""}`],
@@ -253,6 +253,7 @@ function chantierDetail(id) {
       ${achatsCard(c)}
     </div><div>
       ${typeof chPlanCard === "function" ? chPlanCard(id) : ""}
+      ${typeof jrChantierCard === "function" ? jrChantierCard(id) : ""}
       ${typeof chRentaCard === "function" && (typeof permOk !== "function" || permOk("marges")) ? chRentaCard(id) : ""}
       ${typeof mkChantierCards === "function" ? mkChantierCards(id) : ""}
       ${typeof stoChantierCard === "function" && (typeof permOk !== "function" || permOk("achats")) ? stoChantierCard(id) : ""}
