@@ -1,10 +1,66 @@
---- v12/app.js	2026-11-13 21:51:12.000000000 +0000
-+++ out/app.js	2026-11-14 12:41:24.614133123 +0000
-@@ -117,6 +117,7 @@
-   ...(typeof efbatchActions !== "undefined" ? efbatchActions : {}),
-   ...(typeof urssafActions !== "undefined" ? urssafActions : {}),
-   ...(typeof planningActions !== "undefined" ? planningActions : {}),
-+  ...(typeof chiffrageActions !== "undefined" ? chiffrageActions : {}),
+--- ../../full/pilot-main/files/app.js	2026-11-16 02:05:45.000000000 +0000
++++ ../../ia/src/app.js	2026-11-16 19:34:30.070606684 +0000
+@@ -20,14 +20,13 @@
+ }
+ function buildSide() {
+   const side = $("#side");
+-  const item = ([k, l]) => `<button class="nav" data-go="${k}" aria-current="false" title="${esc(l)}">${svg(ic[k])}<span class="t">${esc(l)}</span></button>`;
+   side.innerHTML = `<div class="logo"><i>P</i><b>Pilot</b></div>` +
+-    NAV.map((n) => (n[2] ? `<div class="ng">${esc(n[2])}</div>` : "") + item(n)).join("") +
+-    `<div class="sp"></div>` + item(["params", "Paramètres"]) +
++    navSideHtml() +
+     `<div class="rz" role="separator" aria-orientation="vertical" aria-label="Redimensionner le menu" tabindex="0"></div>`;
+   let w = SW.def;
+   try { w = parseInt(localStorage.getItem("pilot-sw")) || SW.def; } catch (e) {}
+   setSide(w, false);
++  navMark();
+   const rz = $(".rz", side);
+   rz.addEventListener("pointerdown", (e) => {
+     e.preventDefault();
+@@ -55,7 +54,7 @@
+ 
+ /* ---------- Pop-overs ---------- */
+ function closePops(except) {
+-  [["#notifpop", "#bell"], ["#usermenu", "#av"]].forEach(([p, b]) => {
++  [["#notifpop", "#bell"], ["#usermenu", "#av"], ["#newpop", "#newbtn"]].forEach(([p, b]) => {
+     if (p === except) return;
+     $(p).hidden = true;
+     $(b).setAttribute("aria-expanded", "false");
+@@ -125,6 +124,10 @@
    ...(typeof ressourcesActions !== "undefined" ? ressourcesActions : {}),
    ...(typeof tempsActions !== "undefined" ? tempsActions : {}),
    ...(typeof pilotageActions !== "undefined" ? pilotageActions : {}),
++  ...(typeof securiteActions !== "undefined" ? securiteActions : {}),
++  ...(typeof lienActions !== "undefined" ? lienActions : {}),
++  ...(typeof sousTraitanceActions !== "undefined" ? sousTraitanceActions : {}),
++  ...(typeof moeActions !== "undefined" ? moeActions : {}),
+   tab: (id, arg) => { ST.tab[id] = arg; return render(true); },
+   period: (id, arg) => { ST.period = arg; return render(true); },
+   gran: (id, arg) => { ST.gran = arg; return render(true); },
+@@ -221,6 +224,10 @@
+ /* ---------- Événements ---------- */
+ document.addEventListener("click", (e) => {
+   const t = e.target;
++  const dh = t.closest("[data-dh]");
++  if (dh) return navHeaderClick(dh);
++  if (t.closest("#cmdbtn")) return navSearchOpen();
++  if (t.closest("#newbtn")) return togglePop("#newpop", "#newbtn", navNewHtml);
+   if (t.closest("#bell")) return togglePop("#notifpop", "#bell", notifPanel);
+   if (t.closest("#av")) return togglePop("#usermenu", "#av", userMenu);
+   if (t.closest("#th")) return setTh(th === "dark" ? "light" : "dark");
+@@ -241,6 +248,7 @@
+ });
+ document.addEventListener("keydown", (e) => {
+   if (e.key === "Escape") closePops();
++  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); navSearchOpen(); }
+   if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("tr.lnk[data-go]")) { e.preventDefault(); go(e.target.dataset.go); }
+ });
+ document.addEventListener("submit", (e) => {
+@@ -279,6 +287,7 @@
+ /* ---------- Démarrage ---------- */
+ setTh(th);
+ $("#bell").innerHTML = svg(ic.bell) + `<span class="bdg" id="bdg" hidden></span>`;
++$("#cmdbtn").innerHTML = svg(ic.search) + `<span>Rechercher ou aller à…</span><kbd>Ctrl K</kbd>`;
+ $("#th").innerHTML = svg(ic.moon);
+ buildSide();
+ 

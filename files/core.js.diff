@@ -1,10 +1,89 @@
---- v12/core.js	2026-11-13 21:51:12.000000000 +0000
-+++ out/core.js	2026-11-14 12:41:24.613981967 +0000
-@@ -113,6 +113,7 @@
-   // v9 : règlements clients (RIB, chèques, crédits, relances), facultatif tant que migration_v9.sql n'est pas lancée
-   try { if (typeof loadV11 === "function") await loadV11(); } catch (e) { db.v11 = false; console.warn(e); }
-   try { if (typeof loadV12 === "function") await loadV12(); } catch (e) { db.v12 = false; console.warn(e); }
-+  try { if (typeof loadV13 === "function") await loadV13(); } catch (e) { db.v13 = false; console.warn(e); }
+--- ../../full/pilot-main/files/core.js	2026-11-16 02:05:45.000000000 +0000
++++ ../../ia/src/core.js	2026-11-16 19:34:14.929572899 +0000
+@@ -116,6 +116,7 @@
+   try { if (typeof loadV13 === "function") await loadV13(); } catch (e) { db.v13 = false; console.warn(e); }
+   try { if (typeof loadV14 === "function") await loadV14(); } catch (e) { db.v14 = false; db.v14err = e?.message || String(e); console.warn(e); }
+   try { if (typeof loadV15 === "function") await loadV15(); } catch (e) { db.v15 = false; db.v15err = e?.message || String(e); console.warn(e); }
++  try { if (typeof loadV16 === "function") await loadV16(); } catch (e) { db.v16 = false; db.v16err = e?.message || String(e); console.warn(e); }
    try { if (typeof loadV10 === "function") await loadV10(); } catch (e) { db.v10 = false; console.warn(e); }
    try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }
  }
+@@ -181,40 +182,6 @@
+ const svg = (p, c = "") =>
+   `<svg class="${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${p}"/></svg>`;
+ 
+-const NAV = [
+-  ["home", "Accueil", null],
+-  ["chantiers", "Chantiers", "Activité"],
+-  ["planning", "Planning", null],
+-  ["temps", "Temps passés", null],
+-  ["soustraitants", "Sous-traitants", null],
+-  ["materiel", "Matériel", null],
+-  ["clients", "Clients", null],
+-  ["achats", "Achats", null],
+-  ["fournisseurs", "Fournisseurs", null],
+-  ["devis", "Devis", null],
+-  ["marches", "Marchés et analyses", null],
+-  ["factures", "Factures", null],
+-  ["efacture", "Facture électronique", null],
+-  ["mails", "Messagerie", null],
+-  ["notes", "Notes", null],
+-  ["pv", "PV de réception", null],
+-  ["ouvrages", "Bibliothèque", null],
+-  ["documents", "Documents", null],
+-  ["equipes", "Équipes et salariés", "Terrain et stocks"],
+-  ["pointages", "Pointages et paie", null],
+-  ["affectations", "Affectations", null],
+-  ["rapports", "Rapports et photos", null],
+-  ["stocks", "Stocks", null],
+-  ["dispo", "Disponibilité matériel", null],
+-  ["rapprochement", "Rapprochement achats", null],
+-  ["paiements", "Paiements", "Finances"],
+-  ["compta", "Comptabilité", null],
+-  ["analyses", "Analyses", "Pilotage"],
+-  ["rentabilite", "Rentabilité", null],
+-  ["objectifs", "Objectifs", null],
+-  ["tresorerie", "Trésorerie prévue", null],
+-];
+-
+ /* ===================== Routage (#/page/id) ===================== */
+ const V = {}; // vues : V.nom({arg, qs}) -> html | { html, after }
+ const ST = { tab: {}, period: "12", year: new Date().getFullYear(), editing: false };
+@@ -235,17 +202,17 @@
+   const my = ++rid;
+   const r = parseHash();
+   if (!V[r.name]) r.name = "home";
+-  $$(".nav").forEach((n) => n.setAttribute("aria-current", n.dataset.go === (r.name === "bc" ? "achats" : r.name) ? "page" : "false"));
++  navMark();
+   ST.editing = false;
+   let out;
+   try {
+-    out = await V[r.name](r);
++    out = typeof permBlocked === "function" && permBlocked(r.name) ? permDenied() : await V[r.name](r);
+   } catch (e) {
+     console.error(e);
+     out = `<div class="empty"><h2>Une erreur est survenue</h2><p>${esc(friendly(e))}</p><button class="btn" data-go="home">Retour à l'accueil</button></div>`;
+   }
+   if (my !== rid) return;
+-  $("#v").innerHTML = out.html ?? out;
++  $("#v").innerHTML = (r.name === "home" ? "" : navSubbar(r.name)) + (out.html ?? out);
+   const key = location.hash;
+   if (!keepScroll && key !== lastKey) window.scrollTo(0, 0);
+   lastKey = key;
+@@ -255,6 +222,7 @@
+     $$("tbody tr[data-t]").forEach((r) => (r.hidden = !r.dataset.t.includes(t)));
+   };
+   out.after?.();
++  try { if (typeof tabsAfterRender === "function") tabsAfterRender(); } catch (e) { console.warn(e); }
+ }
+ // Recharge les données puis redessine (sans perdre le défilement)
+ async function refresh() {
+@@ -470,6 +438,8 @@
+     try { if (typeof cxHandleReturn === "function") await cxHandleReturn(); } catch (e) { console.warn("retour banque", e); }
+     $("#au")?.remove();
+     renderBell();
++    try { if (typeof applyRole === "function") applyRole(); } catch (e) { console.warn(e); }
++    buildSide();
+     if (!location.hash) location.hash = "#/";
+     await render();
+     subscribeNotifs();
