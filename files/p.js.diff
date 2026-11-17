@@ -1,0 +1,64 @@
+--- main/pilot-main/files/p.js	2026-11-10 15:41:14.000000000 +0000
++++ out/p.js	2026-11-14 12:41:15.398241570 +0000
+@@ -98,6 +98,29 @@
+   const pb = document.getElementById("prb"); if (pb) pb.onclick = () => { const v = document.getElementById("prd").value; if (!v) { document.getElementById("sigr").textContent = "Choisissez une date."; return; } sg2("Promesse", v, pb); };
+ }
+ 
++/* ---- Options et variantes (migration v13, facultatif) ---- */
++let OPTS = null;
++const optHt = (o) => Math.round(Number(o.quantite) * Number(o.prix_unitaire_ht) * 100) / 100;
++function optsHtml(o) {
++  if (!o || !o.options || !o.options.length) return "";
++  const groups = {};
++  o.options.forEach((x) => { const g = (x.groupe || "").trim(); (groups[g || "_" + x.id] ||= []).push(x); });
++  const line = (x, type, name) => `<label class="chk opt"><input type="${type}" name="${esc(name)}" value="${esc(x.id)}"${x.choisie ? " checked" : ""}><span>${esc(x.designation)}<small class="mut"> · ${Number(x.quantite).toLocaleString("fr-FR")} ${esc(x.unite || "")}</small></span><b>+ ${eur(optHt(x))} HT</b></label>`;
++  const body = Object.entries(groups).map(([g, xs]) => g.startsWith("_") ? line(xs[0], "checkbox", "o_" + xs[0].id)
++    : `<fieldset class="optg"><legend>${esc(g)}</legend>${xs.map((x) => line(x, "radio", "g_" + g)).join("")}<label class="chk opt"><input type="radio" name="g_${esc(g)}" value=""${xs.some((x) => x.choisie) ? "" : " checked"}><span>Aucune</span></label></fieldset>`).join("");
++  return `<div class="card" id="optcard"><h2>Options proposées</h2><p class="mut" style="margin:0 0 10px">Cochez celles que vous souhaitez : le total est recalculé. Le PDF ci-dessous présente le devis de base.</p>${body}
++    <div class="opttot"><span>Total avec vos choix</span><b id="opttot"></b></div></div>`;
++}
++const optsChosen = () => [...document.querySelectorAll("#optcard input:checked")].map((i) => i.value).filter(Boolean);
++function optsTotal() {
++  if (!OPTS) return;
++  const chosen = new Set(optsChosen()), all = OPTS.options;
++  let ht = Number(OPTS.montant_ht), ttc = Number(OPTS.montant_ttc);
++  all.forEach((x) => { if (x.choisie) { const h = optHt(x); ht -= h; ttc -= h * (1 + Number(x.taux_tva) / 100); } });
++  all.forEach((x) => { if (chosen.has(x.id)) { const h = optHt(x); ht += h; ttc += h * (1 + Number(x.taux_tva) / 100); } });
++  const el = document.getElementById("opttot"); if (el) el.textContent = `${eur(ttc)} TTC (${eur(ht)} HT)`;
++}
++async function optsSave() { if (OPTS && OPTS.options.length) await rpc("partage_options", { p_token: token, p_ids: optsChosen() }); }
+ async function show() {
+   if (!/^[0-9a-f-]{36}$/i.test(token)) return fail("Ce lien n'est pas valide.");
+   if (!CFG.url || /VOTRE/.test(CFG.url)) return fail("Le site n'est pas configuré.");
+@@ -117,12 +140,15 @@
+     etat = Number(d.reste) <= 0.005 ? `<span class="badge ok">Réglée</span>` : `<span class="badge">Reste à régler : ${eur(d.reste)}</span>`;
+   }
+   const peut = isD && d.statut === "Envoyé" && !d.accepte_at && !d.refuse_at;
++  OPTS = null;
++  if (peut) { try { OPTS = await rpc("partage_options_get", { p_token: token }); } catch (x) { OPTS = null; } }
+   root.innerHTML = `
+     <div class="card top"><div><p class="mut" style="margin:0">${esc(e.nom || "")}</p><h1>${isD ? "Devis" : "Facture"} ${esc(d.numero)}</h1>
+       <p class="mut" style="margin:0">Pour ${esc(d.client)} · ${dt(d.date)}${!isD && d.echeance ? " · échéance " + dt(d.echeance) : ""}</p></div>
+       <div style="text-align:right"><div class="big">${eur(d.montant_ttc)}</div><div class="mut">TTC (${eur(d.montant_ht)} HT)</div></div></div>
+     <div class="card">${etat ? `<p style="margin:0 0 12px">${etat}</p>` : ""}
+       ${pdf ? `<iframe class="pdf" src="${esc(pdf)}" title="${esc(nom)}"></iframe><p class="row" style="margin:12px 0 0"><a class="btn o" href="${esc(pdf)}" target="_blank" rel="noopener" download="${esc(nom)}.pdf">Télécharger le PDF</a></p>` : `<p class="mut">Le PDF n'est pas disponible.</p>`}</div>
++    ${peut ? optsHtml(OPTS) : ""}
+     ${peut ? `<form class="card" id="rep"><h2>Votre réponse</h2><label>Votre nom (pour valider l'acceptation)<input name="nom" autocomplete="name" maxlength="120"></label>
+       <div class="sigbox"><div class="sigh"><span>Votre signature</span><button type="button" class="lk" id="sigclr">Effacer</button></div><canvas id="sig" width="720" height="240" aria-label="Zone de signature : dessinez avec le doigt ou la souris"></canvas><p class="mut sigtip">Dessinez votre signature dans le cadre.</p></div>
+       <label class="chk"><input type="checkbox" name="ok"> J'ai lu ce devis et je l'accepte. Cette signature électronique a valeur d'accord.</label>
+@@ -131,6 +157,7 @@
+     ${!isD && rg ? payBlock(rg) : (!isD && (e.iban) && Number(d.reste) > 0.005 ? `<div class="card"><h2>Règlement par virement</h2><dl><dt>IBAN</dt><dd>${esc(e.iban)}</dd>${e.bic ? `<dt>BIC</dt><dd>${esc(e.bic)}</dd>` : ""}<dt>Référence</dt><dd>${esc(nom)}</dd></dl></div>` : "")}
+     <div class="card"><h2>Contact</h2><p class="mut" style="margin:0">${esc(e.nom || "")}${e.telephone ? " · " + esc(e.telephone) : ""}${e.email ? ` · <a href="mailto:${esc(e.email)}">${esc(e.email)}</a>` : ""}</p></div>`;
+   if (rg) wirePay(rg);
++  document.getElementById("optcard")?.addEventListener("change", optsTotal); optsTotal();
+   const f = document.getElementById("rep");
+   if (!f) return;
+   const er = f.querySelector(".er");
+@@ -164,6 +191,7 @@
+     er.textContent = "";
+     f.querySelectorAll("button").forEach((b) => (b.disabled = true));
+     try {
++      await optsSave();
+       const hash = pdf ? await sha256(pdf) : "";
+       try {
+         await rpc("partage_signer", { p_token: token, p_nom: f.nom.value.trim(), p_signature: cv.toDataURL("image/png"), p_hash: hash, p_ua: navigator.userAgent });

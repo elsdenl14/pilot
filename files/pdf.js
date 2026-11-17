@@ -54,7 +54,7 @@ const PilotPdf = (() => {
    */
   async function build(data, ctx) {
     await loadScript(LIBS.pdflib);
-    const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+    const { PDFDocument, StandardFonts, rgb, degrees } = window.PDFLib;
     const pdf = await PDFDocument.create();
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -107,7 +107,11 @@ const PilotPdf = (() => {
     const newPage = (first = false) => {
       page = pdf.addPage([W, H]);
       drawBg(page);
-      if (!bg) page.drawRectangle({ x: 0, y: H - 8, width: W, height: 8, color: A });
+      if (!bg) page.drawRectangle({ x: 0, y: H - 5, width: W, height: 5, color: A });
+      if (data.statut === "Brouillon") {
+        const ww = bold.widthOfTextAtSize("BROUILLON", 96), a = (35 * Math.PI) / 180;
+        page.drawText("BROUILLON", { x: W / 2 - (ww / 2) * Math.cos(a), y: H / 2 - (ww / 2) * Math.sin(a), size: 96, font: bold, color: rgb(0.94, 0.94, 0.95), rotate: degrees(35) });
+      }
       y = H - topM;
       if (!first) {
         txt(`${kind === "devis" ? "Devis" : "Facture"} ${data.numero || ""} (suite)`, ML, y, { size: 8.5, color: GREY });
@@ -122,8 +126,9 @@ const PilotPdf = (() => {
 
     // ---- En-tête ----
     const fx = kind === "facture" ? data.fx : null, fc = fx?.calc;
+    const isAvoir = fx?.nature === "Avoir";
     const title = kind === "devis" ? "DEVIS" : clean((fx?.label || "Facture").toUpperCase());
-    const tw0 = bold.widthOfTextAtSize(title, 28), tsz = tw0 > 250 ? (28 * 250) / tw0 : 28;
+    const tw0 = bold.widthOfTextAtSize(title, 26), tsz = tw0 > 250 ? (26 * 250) / tw0 : 26;
     const fit = (t, size, maxW, f = font) => { t = clean(t); if (f.widthOfTextAtSize(t, size) <= maxW) return t; while (t.length > 1 && f.widthOfTextAtSize(t + "…", size) > maxW) t = t.slice(0, -1); return t + "…"; };
     const rightX = W - ML;
     if (!bg) {
@@ -141,76 +146,59 @@ const PilotPdf = (() => {
         ent.adresse,
         [ent.telephone, ent.email].filter(Boolean).join("  -  "),
         ent.siret ? "SIRET " + ent.siret : null,
-        ent.tva_intracom ? "TVA " + ent.tva_intracom : null,
       ].filter(Boolean);
       for (const l of idLines) {
         for (const ll of wrap(l, font, 8.5, 250)) { txt(ll, ML, hy - 4, { size: 8.5, color: GREY }); hy -= 11.5; }
       }
-      txt(title, rightX, y - 8, { size: tsz, f: bold, color: A, right: true });
-      const meta0 = fx?.nature === "Avoir" && fx.parentNumero ? 4 : 3;
-      const mx = rightX - 196, my = y - 22, mh = 16 + meta0 * 16;
-      page.drawRectangle({ x: mx, y: my - mh, width: 196, height: mh, color: ASoft });
-      page.drawRectangle({ x: mx, y: my - mh, width: 3, height: mh, color: A });
-      const meta = [
-        ["N°", data.numero || "-"],
-        ["Date d'émission", D(data.date)],
-        kind === "devis" ? ["Valable jusqu'au", D(addDays(data.date, Number(data.validite_jours) || 30))] : fx?.nature === "Avoir" ? ["Date de l'avoir", D(data.date)] : ["Échéance", D(data.echeance)],
-        ...(fx?.nature === "Avoir" && fx.parentNumero ? [["Sur la facture", fx.parentNumero]] : []),
-      ];
-      let ry = my - 18;
-      for (const [k, v] of meta) {
-        txt(k, mx + 14, ry, { size: 8.5, color: GREY });
-        txt(v, rightX - 10, ry, { size: 9.5, f: bold, right: true });
-        ry -= 16;
-      }
-      ry = my - mh;
-      if (data.statut === "Brouillon") { txt("BROUILLON", rightX, ry - 14, { size: 9, f: bold, color: rgb(0.7, 0.25, 0.2), right: true }); ry -= 16; }
-      y = Math.min(hy, ry) - 16;
+      txt(title, rightX, y - 10, { size: tsz, f: bold, color: A, right: true });
+      txt("N° " + (data.numero || "-"), rightX, y - 30, { size: 11, f: bold, right: true });
+      y = Math.min(hy, y - 36) - 14;
     } else {
       txt(`${title}  ${data.numero || ""}`, ML, y - 4, { size: 18, f: bold, color: A });
-      if (fx?.nature === "Avoir" && fx.parentNumero) { txt("Sur la facture " + fx.parentNumero, ML, y - 18, { size: 9, color: GREY }); y -= 12; }
-      let ry = y - 24;
-      const meta = [
-        "Date : " + D(data.date),
-        kind === "devis" ? "Valable " + (data.validite_jours || 30) + " jours" : "Échéance : " + D(data.echeance),
-      ];
-      for (const m of meta) { txt(m, ML, ry, { size: 9.5, color: GREY }); ry -= 13; }
-      if (data.statut === "Brouillon") txt("BROUILLON", ML, ry, { size: 9, f: bold, color: rgb(0.7, 0.25, 0.2) });
-      y = ry - 20;
+      y -= 26;
     }
+    page.drawLine({ start: { x: ML, y }, end: { x: W - ML, y }, thickness: 0.8, color: LINE });
+    y -= 16;
 
-    // ---- Bloc client + projet ----
+    // ---- Client (gauche) et dates (droite) ----
     const c = data.client || {};
     const cl = [c.nom, c.adresse, c.ville, c.telephone, c.email].filter(Boolean);
-    const boxW = 250, boxX = W - ML - boxW;
+    const colW = 270, kx = W - ML - 215;
     const clientLines = [];
-    cl.forEach((l, i) => wrap(l, i === 0 ? bold : font, i === 0 ? 10.5 : 9, boxW - 28).forEach((ll) => clientLines.push([ll, i === 0])));
-    const objet = [];
-    if (data.chantier?.nom) objet.push(["Chantier", [data.chantier.nom, data.chantier.ville].filter(Boolean).join(" - ")]);
-    if (kind === "facture" && data.devis_numero) objet.push(["Réf. devis", data.devis_numero]);
-    const objLines = objet.map(([k, v]) => [k, wrap(v, font, 9.5, boxX - ML - 18)]);
-    const leftH = objLines.length ? 24 + sum(objLines, ([, ls]) => 13 + ls.length * 12.5 + 6) : 0;
-    const boxH = Math.max(36 + clientLines.length * 13, leftH + 4);
-    need(boxH + 20);
+    cl.forEach((l, i) => wrap(l, i === 0 ? bold : font, i === 0 ? 11 : 9, colW).forEach((ll) => clientLines.push([ll, i === 0])));
+    const chant = data.chantier?.nom ? wrap([data.chantier.nom, data.chantier.ville].filter(Boolean).join(" - "), bold, 9.5, colW) : [];
+    const kv = [
+      [isAvoir ? "Date de l'avoir" : "Date d'émission", D(data.date)],
+      kind === "devis" ? ["Valable jusqu'au", D(addDays(data.date, Number(data.validite_jours) || 30))] : isAvoir ? null : ["À payer avant le", D(data.echeance)],
+      isAvoir && fx.parentNumero ? ["Sur la facture", fx.parentNumero] : null,
+      kind === "facture" && data.devis_numero ? ["Selon devis", data.devis_numero] : null,
+      data.statut === "Brouillon" ? ["Statut", "Brouillon"] : null,
+    ].filter(Boolean);
+    const leftH = 14 + clientLines.length * 13 + (chant.length ? 16 + chant.length * 12.5 + 4 : 0);
+    const rightH = 2 + kv.length * 20;
+    need(Math.max(leftH, rightH) + 20);
     const by = y;
-    page.drawRectangle({ x: boxX, y: by - boxH, width: boxW, height: boxH, color: ASoft });
-    page.drawRectangle({ x: boxX, y: by - boxH, width: 3, height: boxH, color: A });
-    txt(kind === "devis" ? "DESTINATAIRE" : "FACTURÉ À", boxX + 14, by - 16, { size: 7.5, f: bold, color: A });
-    let cy = by - 33;
-    for (const [ll, b] of clientLines) { txt(ll, boxX + 14, cy, { size: b ? 10.5 : 9, f: b ? bold : font }); cy -= 13; }
-    let oy = by - 16;
-    if (objLines.length) { txt(kind === "devis" ? "PROJET" : "RÉFÉRENCES", ML, oy, { size: 7.5, f: bold, color: A }); oy -= 17; }
-    for (const [k, ls] of objLines) {
-      txt(k, ML, oy, { size: 8, color: GREY });
-      oy -= 13;
-      for (const ll of ls) { txt(ll, ML, oy, { size: 9.5, f: bold }); oy -= 12.5; }
-      oy -= 6;
+    txt(kind === "devis" ? "DESTINATAIRE" : "FACTURÉ À", ML, by - 8, { size: 7.5, f: bold, color: A });
+    let cy = by - 24;
+    for (const [ll, b] of clientLines) { txt(ll, ML, cy, { size: b ? 11 : 9, f: b ? bold : font, color: b ? INK : GREY }); cy -= 13; }
+    if (chant.length) {
+      cy -= 6;
+      txt("CHANTIER", ML, cy, { size: 7.5, f: bold, color: A });
+      cy -= 13;
+      for (const ll of chant) { txt(ll, ML, cy, { size: 9.5, f: bold }); cy -= 12.5; }
     }
-    y = by - boxH - 14;
+    let ky = by - 8;
+    kv.forEach(([k, v], i) => {
+      page.drawLine({ start: { x: kx, y: ky - 7 }, end: { x: rightX, y: ky - 7 }, thickness: 0.4, color: LINE });
+      txt(k, kx, ky - 3, { size: 8.5, color: GREY });
+      txt(v, rightX, ky - 3, { size: 9.5, f: bold, right: true, color: v === "Brouillon" ? rgb(0.7, 0.25, 0.2) : INK });
+      ky -= 20;
+    });
+    y = Math.min(cy, ky + 8) - 16;
 
     // ---- Tableau ----
-    const X = { n: ML + 6, qte: 330, unite: 338, pu: 432, tva: 478, tot: W - ML - 6 };
-    const designX = ML + 32, designW = X.qte - designX - 40;
+    const X = { n: ML, qte: 392, pu: 452, tva: 494, tot: W - ML };
+    const designX = ML + 26, designW = 262;
     const WHITE = rgb(1, 1, 1), ZEBRA = rgb(0.975, 0.978, 0.982);
     const lignes = data.lignes?.length ? data.lignes : data.ht > 0 ? [{ designation: "Prestation", quantite: 1, unite: "forfait", prix_unitaire_ht: data.ht, taux_tva: data.taux_tva ?? 20 }] : [];
     const lht = (l) => r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
@@ -252,76 +240,70 @@ const PilotPdf = (() => {
       });
       y -= 10;
     }
-    // Récapitulatif : on voit d'un coup d'oeil le prix de chaque poste
-    if (groups.filter((g) => g.cat).length >= 2) {
-      need(40 + groups.length * 17);
-      txt("RÉCAPITULATIF DES TRAVAUX", ML, y - 8, { size: 8, f: bold, color: A });
-      y -= 22;
-      groups.forEach((g, i) => {
-        need(20);
-        txt(`${i + 1}.  ${g.cat || "Divers"}`, ML + 6, y - 8, { size: 9.5 });
-        txt(money(g.sum), X.tot, y - 8, { size: 9.5, f: bold, right: true });
-        y -= 16;
-        page.drawLine({ start: { x: ML, y: y + 3 }, end: { x: W - ML, y: y + 3 }, thickness: 0.4, color: LINE });
-      });
-      y -= 10;
-    }
+    // Tableau cadrillé : colonnes Qté | Désignation | TVA | P.U. | Total
+    const BORD = rgb(0.68, 0.71, 0.76);
+    const G = [ML, ML + 62, ML + 322, ML + 372, ML + 438, W - ML]; // bords des colonnes
+    const vlines = (y0, h, inner = true) => {
+      (inner ? G : [G[0], G[G.length - 1]]).forEach((x) => page.drawLine({ start: { x, y: y0 }, end: { x, y: y0 - h }, thickness: 0.6, color: BORD }));
+    };
+    const hline = (yy, thick = 0.5, color = LINE) => page.drawLine({ start: { x: ML, y: yy }, end: { x: W - ML, y: yy }, thickness: thick, color });
+    const desX = G[1] + 8, desW = G[2] - G[1] - 16;
     const header = () => {
-      need(60);
-      page.drawRectangle({ x: ML, y: y - 20, width: W - 2 * ML, height: 22, color: A });
-      txt("N°", X.n, y - 13, { size: 8.5, f: bold, color: WHITE });
-      txt("Désignation", designX, y - 13, { size: 8.5, f: bold, color: WHITE });
-      txt("Qté", X.qte, y - 13, { size: 8.5, f: bold, color: WHITE, right: true });
-      txt("Unité", X.unite, y - 13, { size: 8.5, f: bold, color: WHITE });
-      txt("P.U. HT", X.pu, y - 13, { size: 8.5, f: bold, color: WHITE, right: true });
-      txt("TVA", X.tva, y - 13, { size: 8.5, f: bold, color: WHITE, right: true });
-      txt("Total HT", X.tot, y - 13, { size: 8.5, f: bold, color: WHITE, right: true });
-      y -= 26;
+      need(70);
+      const hh = 24;
+      page.drawRectangle({ x: ML, y: y - hh, width: W - 2 * ML, height: hh, color: ASoft });
+      hline(y, 0.9, BORD); hline(y - hh, 0.9, BORD);
+      vlines(y, hh);
+      const hs = { size: 8.5, f: bold, color: A }, cx = (i, t) => txt(t, (G[i] + G[i + 1]) / 2 - bold.widthOfTextAtSize(clean(t), 8.5) / 2, y - 15.5, hs);
+      cx(0, "Qté"); cx(1, "Désignation"); cx(2, "TVA"); cx(3, "Prix unit. HT"); cx(4, "Total HT");
+      y -= hh;
     };
     header();
     const band = (g, gi, cont) => {
-      page.drawRectangle({ x: ML, y: y - 21, width: W - 2 * ML, height: 23, color: ASoft });
-      page.drawRectangle({ x: ML, y: y - 21, width: 3, height: 23, color: A });
-      txt(`${gi + 1}.  ${g.cat}${cont ? " (suite)" : ""}`, ML + 12, y - 14, { size: 10, f: bold, color: A });
-      txt("Sous-total " + money(g.sum), X.tot, y - 14, { size: 9, f: bold, color: A, right: true });
-      y -= 27;
+      const bh = 22;
+      page.drawRectangle({ x: ML, y: y - bh, width: W - 2 * ML, height: bh, color: rgb(0.955, 0.96, 0.968) });
+      vlines(y, bh, false); hline(y - bh, 0.5, BORD);
+      txt(`${gi + 1}.  ${fit(g.cat, 10, 330, bold)}${cont ? " (suite)" : ""}`, ML + 8, y - 14.5, { size: 10, f: bold, color: A });
+      txt("Sous-total " + money(g.sum), W - ML - 8, y - 14.5, { size: 9, f: bold, right: true });
+      y -= bh;
     };
     groups.forEach((g, gi) => {
-      if (g.cat) { if (y - 80 < botM) { newPage(); header(); } band(g, gi, false); }
+      if (g.cat) { if (y - 90 < botM) { newPage(); header(); } band(g, gi, false); }
       g.items.forEach((l, li) => {
         if (l.type_ligne === "image") {
           const im = emb[l.image_path], cap = l.designation && l.designation !== "Image" ? String(l.designation) : "";
-          const sc = Math.min(300 / im.width, 190 / im.height, 1), dw = im.width * sc, dh = im.height * sc, rh = dh + (cap ? 15 : 0) + 12;
+          const sc = Math.min(300 / im.width, 190 / im.height, 1), dw = im.width * sc, dh = im.height * sc, rh = dh + (cap ? 15 : 0) + 14;
           if (y - rh < botM) { newPage(); header(); if (g.cat) band(g, gi, true); }
-          page.drawImage(im, { x: designX, y: y - dh - 4, width: dw, height: dh });
-          if (cap) txt(fit(cap, 8.5, W - 2 * ML - 60), designX, y - dh - 15, { size: 8.5, color: GREY });
-          y -= rh;
+          vlines(y, rh, false);
+          page.drawImage(im, { x: desX, y: y - dh - 6, width: dw, height: dh });
+          if (cap) txt(fit(cap, 8.5, W - 2 * ML - 60), desX, y - dh - 17, { size: 8.5, color: GREY });
+          y -= rh; hline(y, 0.5);
           return;
         }
         const ht = lht(l), libre = l.nature === "libre";
-        const lines = wrap(l.designation + (l.est_option ? " (option retenue)" : ""), font, 9.5, designW);
-        const dl = l.description ? String(l.description).split("\n").flatMap((p) => wrap(p, font, 8.5, designW)) : [];
-        const rh = lines.length * 12.5 + dl.length * 11 + 11;
+        const lines = wrap(l.designation + (l.est_option ? " (option retenue)" : ""), font, 9.5, desW);
+        const dl = l.description ? String(l.description).split("\n").flatMap((p) => wrap(p, font, 8.5, desW)) : [];
+        const rh = lines.length * 12.5 + dl.length * 10.8 + 16;
         if (y - rh < botM) { newPage(); header(); if (g.cat) band(g, gi, true); }
-        if (li % 2 === 1) page.drawRectangle({ x: ML, y: y - rh + 2, width: W - 2 * ML, height: rh, color: ZEBRA });
-        txt(`${gi + 1}.${g.items.slice(0, li).filter((x) => x.type_ligne !== "image").length + 1}`, X.n, y - 11, { size: 8.5, color: GREY });
-        lines.forEach((ll, i) => txt(ll, designX, y - 11 - i * 12.5, { size: 9.5 }));
-        dl.forEach((ll, i) => txt(ll, designX, y - 11 - lines.length * 12.5 - i * 11, { size: 8.5, color: GREY }));
-        const q = Number(l.quantite);
+        vlines(y, rh);
+        const ty = y - 12;
+        lines.forEach((ll, i) => txt(ll, desX, ty - i * 12.5, { size: 9.5 }));
+        dl.forEach((ll, i) => txt(ll, desX, ty - lines.length * 12.5 - i * 10.8, { size: 8.5, color: GREY }));
+        const q = Number(l.quantite), mid = (a, b) => (G[a] + G[b]) / 2;
+        const ctr = (t, i, o = {}) => { t = clean(t); txt(t, mid(i, i + 1) - (o.f || font).widthOfTextAtSize(t, o.size || 9.5) / 2, ty, o); };
         if (!libre) {
-          txt(fmtNum(q, Number.isInteger(q) ? 0 : 2), X.qte, y - 11, { right: true });
-          txt(l.unite || "", X.unite, y - 11, { color: GREY });
-          txt(fmtNum(l.prix_unitaire_ht, 2), X.pu, y - 11, { right: true });
+          ctr(`${fmtNum(q, Number.isInteger(q) ? 0 : 2)} ${l.unite || ""}`.trim(), 0);
+          txt(fmtNum(l.prix_unitaire_ht, 2), G[4] - 7, ty, { right: true });
         }
         if (!libre || ht) {
-          txt(fmtNum(l.taux_tva, Number(l.taux_tva) % 1 ? 1 : 0) + " %", X.tva, y - 11, { right: true, color: GREY });
-          txt(fmtNum(ht, 2), X.tot, y - 11, { right: true, f: bold });
+          ctr(fmtNum(l.taux_tva, Number(l.taux_tva) % 1 ? 1 : 0) + " %", 2, { color: GREY });
+          txt(fmtNum(ht, 2), G[5] - 7, ty, { right: true, f: bold });
         }
         y -= rh;
-        page.drawLine({ start: { x: ML, y: y + 2 }, end: { x: W - ML, y: y + 2 }, thickness: 0.4, color: LINE });
+        hline(y, 0.5, g.items.length - 1 === li ? BORD : LINE);
       });
-      y -= 6;
     });
+    y -= 16;
     y -= 8;
 
     // ---- Options proposées, non comprises dans le total ----
@@ -332,7 +314,7 @@ const PilotPdf = (() => {
       optsOff.forEach((l) => {
         need(20);
         txt(fit(l.designation + (l.option_groupe ? "  (" + l.option_groupe + ")" : ""), 9.5, 330), ML + 6, y - 8, { size: 9.5 });
-        txt(`${fmtNum(l.quantite, Number.isInteger(Number(l.quantite)) ? 0 : 2)} ${l.unite || ""}`, X.unite + 30, y - 8, { size: 9, color: GREY, right: true });
+        txt(`${fmtNum(l.quantite, Number.isInteger(Number(l.quantite)) ? 0 : 2)} ${l.unite || ""}`, X.qte, y - 8, { size: 9, color: GREY, right: true });
         txt("+ " + money(lht(l)) + " HT", X.tot, y - 8, { size: 9.5, f: bold, right: true });
         y -= 16;
         page.drawLine({ start: { x: ML, y: y + 3 }, end: { x: W - ML, y: y + 3 }, thickness: 0.4, color: LINE });
@@ -377,8 +359,22 @@ const PilotPdf = (() => {
     const showNet = kind === "facture" && fx?.nature !== "Avoir" && (adj.length > 0 || fc?.escompte > 0);
     const netDu = showNet ? r2(fc.net - (fx.avoirs || 0)) : Number(data.ttc);
     const nrows = tot.length + 2 + (showNet ? adj.length + 2 : 0) + (kind === "facture" && paye > 0 ? 2 : 0) + (fc?.escompte ? 1 : 0);
-    need(nrows * 17 + 24);
+    const recap = groups.filter((g) => g.cat).length >= 2 ? groups : [];
+    need(Math.max(nrows * 17 + 24, recap.length ? recap.length * 15 + 34 : 0));
     const tx = W - ML - 235;
+    let recapEnd = y;
+    if (recap.length) {
+      let ry = y;
+      txt("RÉCAPITULATIF PAR POSTE", ML, ry - 8, { size: 7.5, f: bold, color: A });
+      ry -= 20;
+      recap.forEach((g, i) => {
+        txt(`${i + 1}.  ${fit(g.cat || "Divers", 9, 170)}`, ML, ry - 6, { size: 9 });
+        txt(money(g.sum), tx - 30, ry - 6, { size: 9, f: bold, right: true });
+        ry -= 15;
+        page.drawLine({ start: { x: ML, y: ry + 3 }, end: { x: tx - 30, y: ry + 3 }, thickness: 0.4, color: LINE });
+      });
+      recapEnd = ry;
+    }
     for (const [k, v] of tot) {
       txt(k, tx, y - 10, { size: 9, color: GREY });
       txt(v, W - ML - 6, y - 10, { size: 9.5, right: true });
@@ -413,16 +409,16 @@ const PilotPdf = (() => {
       txt(money(fx?.reste ?? Number(data.ttc) - paye), W - ML - 6, y - 6, { size: 10.5, f: bold, right: true });
       y -= 22;
     }
-    y -= 8;
+    y = Math.min(y, recapEnd) - 8;
 
     // ---- Notes, conditions, règlement ----
     const para = (label, text) => {
-      const ls = wrap(text, font, 8.5, W - 2 * ML);
-      need(ls.length * 11.5 + 24);
+      const ls = wrap(text, font, 8, W - 2 * ML);
+      need(ls.length * 10.5 + 22);
       txt(label.toUpperCase(), ML, y - 8, { size: 7.5, f: bold, color: A });
-      y -= 18;
-      for (const l of ls) { txt(l, ML, y - 2, { size: 8.5 }); y -= 11.5; }
-      y -= 8;
+      y -= 16;
+      for (const l of ls) { txt(l, ML, y - 2, { size: 8, color: INK }); y -= 10.5; }
+      y -= 6;
     };
     const mentionsBlock = () => {
       const ms = data.mentions || [];
@@ -470,15 +466,15 @@ const PilotPdf = (() => {
       }
       para("Conditions", `Devis valable ${data.validite_jours || 30} jours à compter de sa date d'émission. Les travaux débuteront après réception du devis daté et signé.`);
       mentionsBlock();
-      need(104);
+      need(80);
       const sy = y, bw = (W - 2 * ML - 20) / 2;
       [["Le client", "Date et signature, précédées de « Bon pour accord »"], ["L'entreprise", ent.nom || "Cachet et signature"]].forEach(([t, sub], i) => {
         const bx = ML + i * (bw + 20);
-        page.drawRectangle({ x: bx, y: sy - 84, width: bw, height: 86, borderColor: LINE, borderWidth: 0.8 });
+        page.drawRectangle({ x: bx, y: sy - 64, width: bw, height: 66, borderColor: LINE, borderWidth: 0.8 });
         txt(t, bx + 10, sy - 16, { size: 9, f: bold, color: A });
         txt(sub, bx + 10, sy - 29, { size: 7.5, color: GREY });
       });
-      y = sy - 96;
+      y = sy - 76;
     }
 
     // ---- Pieds de page ----

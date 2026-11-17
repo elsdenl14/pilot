@@ -1,0 +1,13 @@
+--- main/pilot-main/files/views-signature.js	2026-11-10 15:41:14.000000000 +0000
++++ out/views-signature.js	2026-11-14 12:41:15.398004806 +0000
+@@ -64,6 +64,10 @@
+     row("Date et heure", `${quand} (heure de Paris)`);
+     row("Horodatage (UTC)", new Date(sig.signed_at).toISOString());
+     row("Document", `Devis ${d.numero || ""} · ${E2(d.montant_ttc)} TTC · ${d.client_nom || ""}`);
++    try {
++      const op = db.v13 ? (await q(sb.from("devis_lignes").select("designation,quantite,unite,prix_unitaire_ht,option_choisie").eq("devis_id", d.id).eq("est_option", true).order("position"))) : [];
++      if (op.length) row("Options", op.map((x) => `${x.option_choisie ? "Retenue" : "Non retenue"} : ${x.designation} (${E2(Number(x.quantite) * Number(x.prix_unitaire_ht))} HT)`).join(" · "));
++    } catch (e) { console.warn(e); }
+     page.drawText(T("Empreinte SHA-256 du document consulté"), { x: M, y, size: 9, font, color: GREY }); y -= 14;
+     for (const l of [sig.hash_pdf ? sig.hash_pdf.slice(0, 32) : "non disponible", sig.hash_pdf ? sig.hash_pdf.slice(32) : ""].filter(Boolean)) { page.drawText(l, { x: M, y, size: 9.5, font: bold, color: INK }); y -= 13; }
+     y -= 4;

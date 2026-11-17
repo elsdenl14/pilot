@@ -166,12 +166,12 @@ function ligneRow(l = {}) {
   const tva = l.taux_tva ?? (Number(db.ent.taux_tva_defaut) || 20);
   const nat = l.nature || "normale";
   return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}" data-tp="${l._tp ?? ""}" data-mref="${esc(l.marche_ref || "")}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Poste libre : libellé (ex : frais de déplacement, remise commerciale)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea>${cxCurK === "devis" ? cxPanel(l) : ""}</td>
-    <td style="width:78px"><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}"></td>
+    <td style="width:64px"><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}"></td>
     <td style="width:86px"><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}"></td>
-    <td style="width:104px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
-    <td style="width:84px"><select data-f="tva">${[...new Set([...TVA_TAUX, Number(tva)])].map((t) => `<option value="${t}"${Number(t) === Number(tva) ? " selected" : ""}>${String(t).replace(".", ",")} %</option>`).join("")}</select></td>
-    <td class="lt" style="width:100px"><span data-f="tot">0,00</span></td>
-    <td class="lact"><button type="button" class="rm" data-up title="Monter" aria-label="Monter la ligne">${svg(ic.up)}</button><button type="button" class="rm" data-down title="Descendre" aria-label="Descendre la ligne">${svg(ic.down)}</button><button type="button" class="rm" data-dup title="Dupliquer la ligne" aria-label="Dupliquer la ligne">${svg(ic.dup)}</button><button type="button" class="rm" data-rm title="Supprimer la ligne" aria-label="Supprimer la ligne">${svg(ic.x)}</button></td></tr>`;
+    <td style="width:92px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
+    <td style="width:80px"><select data-f="tva">${[...new Set([...TVA_TAUX, Number(tva)])].map((t) => `<option value="${t}"${Number(t) === Number(tva) ? " selected" : ""}>${String(t).replace(".", ",")} %</option>`).join("")}</select></td>
+    <td class="lt" style="width:92px"><span data-f="tot">0,00</span></td>
+    <td class="lact"><span class="lmore"><button type="button" class="rm" data-up title="Monter" aria-label="Monter la ligne">${svg(ic.up)}</button><button type="button" class="rm" data-down title="Descendre" aria-label="Descendre la ligne">${svg(ic.down)}</button><button type="button" class="rm" data-dup title="Dupliquer la ligne" aria-label="Dupliquer la ligne">${svg(ic.dup)}</button></span><button type="button" class="rm" data-rm title="Supprimer la ligne" aria-label="Supprimer la ligne">${svg(ic.x)}</button></td></tr>`;
 }
 // Regroupe les lignes consécutives qui ont la même catégorie
 function groupCats(ls, composite = false) {
@@ -265,24 +265,26 @@ async function docForm(K, d, opts = {}) {
   if (opts.chantier) preClient = byId(db.chantiers, opts.chantier)?.client_id || preClient;
   const chOpts = (cid) => [{ v: "", l: "Sans chantier" }, ...db.chantiers.filter((c) => !cid || c.client_id === cid).map((c) => ({ v: c.id, l: c.nom }))];
   const isD = K === "devis", noAvoir = K === "facture" && db.v8 && fxNat(d || {}) !== "Avoir";
-  const sec = (n, t, h, inner) => `<section class="eds"><h3><i>${n}</i>${t}</h3>${h ? `<p class="edh">${h}</p>` : ""}${inner}</section>`;
+  const edc = (t, inner, cls = "") => `<section class="edc ${cls}"><h3>${t}</h3>${inner}</section>`;
   const body = `<datalist id="unites">${UNITES.map((u) => `<option value="${u}">`).join("")}</datalist><div class="ed">
-    ${sec(1, "Pour qui ?", isD ? "Choisissez le client (ou créez-le d'un clic) et, si besoin, le chantier concerné." : "Choisissez le client à facturer et, si besoin, le chantier concerné.", `<div class="frm">
-      ${clientBlock(preClient)}
-      ${fld({ k: "chantier_id", l: "Chantier (facultatif)", t: "select", o: chOpts(preClient || db.clients[0]?.id), v: opts.chantier || d?.chantier_id || "", r: 0 })}</div>`)}
-    ${sec(2, isD ? "Date et validité" : "Date et paiement", "", `<div class="frm">
-      ${fld({ k: "date", l: isD ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
-      ${isD ? `<div>${fld({ k: "validite_jours", l: "Valable pendant (jours)", t: "number", v: d?.validite_jours || 30 })}<div class="chips" data-chips="validite_jours">${[15, 30, 60, 90].map((n) => `<button type="button" class="chip-b" data-set="validite_jours" data-val="${n}">${n} jours</button>`).join("")}</div></div>`
-        : `<div>${fld({ k: "echeance", l: "À payer avant le", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}<div class="chips" data-chips="echeance">${[[0, "À réception"], [30, "30 jours"], [45, "45 jours"], [60, "60 jours"]].map(([n, l]) => `<button type="button" class="chip-b" data-days="${n}">${l}</button>`).join("")}</div></div>`}</div>`)}
-    ${sec(3, "Prestations", "Cherchez une prestation dans votre bibliothèque ou décrivez-la, puis réglez la quantité et le prix : les totaux se calculent seuls.", `
+    <div class="ed-top">
+      ${edc("Client", `<div class="frm1">${clientBlock(preClient)}
+        ${fld({ k: "chantier_id", l: "Chantier (facultatif)", t: "select", o: chOpts(preClient || db.clients[0]?.id), v: opts.chantier || d?.chantier_id || "", r: 0 })}</div>`)}
+      ${edc(isD ? "Dates" : "Dates et paiement", `<div class="frm1">
+        ${fld({ k: "date", l: isD ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
+        ${isD ? `<div>${fld({ k: "validite_jours", l: "Valable pendant (jours)", t: "number", v: d?.validite_jours || 30 })}<div class="chips" data-chips="validite_jours">${[15, 30, 60, 90].map((n) => `<button type="button" class="chip-b" data-set="validite_jours" data-val="${n}">${n} j</button>`).join("")}</div></div>`
+          : `<div>${fld({ k: "echeance", l: "À payer avant le", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}<div class="chips" data-chips="echeance">${[[0, "À réception"], [30, "30 j"], [45, "45 j"], [60, "60 j"]].map(([n, l]) => `<button type="button" class="chip-b" data-days="${n}">${l}</button>`).join("")}</div></div>`}</div>`)}
+    </div>
+    ${edc("Prestations", `
       <div class="qadd"><div class="qin">${svg(ic.search)}<input id="qaq" type="text" autocomplete="off" placeholder="${isD ? "Que faut-il chiffrer" : "Que faut-il facturer"} ? Tapez « carrelage », « cloison »… puis Entrée" aria-label="Ajouter une prestation"><button type="button" class="btn sm" id="qaok">Ajouter</button></div><div id="qasug" class="qsug" hidden></div></div>
       <div id="cats">${groupCats(lignes).map(catBlock).join("")}</div>
-      <div class="edtools"><span class="edt-l">Ajouter aussi :</span><button type="button" class="btn o sm" id="addc">Une section (ex : Plomberie)</button><button type="button" class="btn o sm" id="addov">Parcourir la bibliothèque</button>${K === "facture" ? `<button type="button" class="btn o sm" id="addlibre">Un poste libre (frais, remise…)</button>` : ""}${cxCurK === "devis" ? cxToolbar(K) : ""}</div>
-      <div class="totbox" id="totbox"></div>`)}
-    ${sec(4, "Remarques", "Ces remarques apparaissent sur le document. " + (isD ? "Vous pourrez ensuite le vérifier, l'envoyer au client ou le télécharger en PDF." : "Vous pourrez ensuite la vérifier, l'envoyer ou l'encaisser."), `<div class="frm">
-      ${fld({ k: "notes", l: "Remarques", t: "textarea", v: d?.notes || opts.notes || "", r: 0, cls: "full" })}
-      <div class="chips full"><span class="edt-l">Ajouter :</span>${(isD ? ["Acompte de 30 % à la signature du devis.", "Solde à la réception des travaux.", "Délai de démarrage à convenir avec le client."] : ["Règlement par virement bancaire.", "Solde à la réception des travaux.", "Aucun escompte pour paiement anticipé."]).map((t) => `<button type="button" class="chip-b" data-note="${esc(t)}">${esc(t.replace(/\.$/, ""))}</button>`).join("")}</div></div>
-      ${noAvoir ? `<details class="edadv"><summary>Retenue de garantie, acomptes, autoliquidation… (facultatif)</summary><div class="frm">${fxAdjFields(d ? fdOf(d.id) : {})}</div></details>` : ""}`)}
+      <div class="edtools"><button type="button" class="btn o sm" id="addc">+ Section</button><button type="button" class="btn o sm" id="addov">Bibliothèque</button>${K === "facture" ? `<button type="button" class="btn o sm" id="addlibre">+ Poste libre</button>` : ""}${cxCurK === "devis" ? cxToolbar(K) : ""}</div>`, "ed-lines")}
+    <div class="ed-bot">
+      ${edc("Remarques", `${fld({ k: "notes", l: "Texte affiché sur le document", t: "textarea", v: d?.notes || opts.notes || "", r: 0, cls: "full" })}
+        <div class="chips"><span class="edt-l">Ajouter :</span>${(isD ? ["Acompte de 30 % à la signature du devis.", "Solde à la réception des travaux.", "Délai de démarrage à convenir avec le client."] : ["Règlement par virement bancaire.", "Solde à la réception des travaux.", "Aucun escompte pour paiement anticipé."]).map((t) => `<button type="button" class="chip-b" data-note="${esc(t)}">${esc(t.replace(/\.$/, ""))}</button>`).join("")}</div>
+        ${noAvoir ? `<details class="edadv"><summary>Retenue de garantie, acomptes, autoliquidation… (facultatif)</summary><div class="frm">${fxAdjFields(d ? fdOf(d.id) : {})}</div></details>` : ""}`)}
+      ${edc("Total", `<div class="totbox" id="totbox"></div>`, "ed-tot")}
+    </div>
   </div>`;
   modal(d ? `Modifier ${esc(docNum(d, K))}` : K === "devis" ? "Nouveau devis" : "Nouvelle facture", body, {
     xl: true, wide: true, submit: d ? "Enregistrer" : "Créer le brouillon", extra: `<span id="edstat" class="edstat"></span>`,

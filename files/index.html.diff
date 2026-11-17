@@ -1,29 +1,10 @@
---- ../../full/pilot-main/files/index.html	2026-11-16 02:05:45.000000000 +0000
-+++ ../../ia/src/index.html	2026-11-17 03:07:05.521232012 +0000
-@@ -16,8 +16,13 @@
-       <main>
-         <header class="top">
-           <span class="ro-badge" id="robadge" hidden>Lecture seule · dossier comptable</span>
-+          <button class="cmdbtn" id="cmdbtn" aria-label="Rechercher ou aller à une page" title="Rechercher (Ctrl+K)"></button>
-           <span class="sp"></span>
-           <div class="pw">
-+            <button class="btn sm newbtn" id="newbtn" aria-haspopup="true" aria-expanded="false">+ Nouveau</button>
-+            <div id="newpop" class="pop sm" hidden></div>
-+          </div>
-+          <div class="pw">
-             <button class="ib" id="bell" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" title="Notifications"></button>
-             <div id="notifpop" class="pop" hidden></div>
-           </div>
-@@ -69,6 +74,12 @@
-     <script src="views-btp.js"></script>
-     <script src="views-equipes.js"></script>
-     <script src="views-stocks.js"></script>
-+    <script src="views-securite.js"></script>
-+    <script src="views-soustraitance.js"></script>
-+    <script src="views-moe.js"></script>
-+    <script src="views-accueil-fin.js"></script>
-+    <script src="views-editeur.js"></script>
-+    <script src="nav.js"></script>
+--- v12/index.html	2026-11-13 21:51:12.000000000 +0000
++++ out/index.html	2026-11-14 12:41:24.614173441 +0000
+@@ -64,6 +64,7 @@
+     <script src="views-ressources.js"></script>
+     <script src="views-temps.js"></script>
+     <script src="views-pilotage.js"></script>
++    <script src="views-chiffrage.js"></script>
      <script src="app.js"></script>
    </body>
  </html>
