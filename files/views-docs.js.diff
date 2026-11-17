@@ -1,0 +1,77 @@
+--- ../../full/pilot-main/files/views-docs.js	2026-11-16 02:05:45.000000000 +0000
++++ ../../ia/src/views-docs.js	2026-11-17 03:07:54.782773784 +0000
+@@ -171,7 +171,7 @@
+     <td style="width:104px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
+     <td style="width:84px"><select data-f="tva">${[...new Set([...TVA_TAUX, Number(tva)])].map((t) => `<option value="${t}"${Number(t) === Number(tva) ? " selected" : ""}>${String(t).replace(".", ",")} %</option>`).join("")}</select></td>
+     <td class="lt" style="width:100px"><span data-f="tot">0,00</span></td>
+-    <td style="width:34px"><button type="button" class="rm" data-rm title="Supprimer la ligne" aria-label="Supprimer la ligne">${svg(ic.x)}</button></td></tr>`;
++    <td class="lact"><button type="button" class="rm" data-up title="Monter" aria-label="Monter la ligne">${svg(ic.up)}</button><button type="button" class="rm" data-down title="Descendre" aria-label="Descendre la ligne">${svg(ic.down)}</button><button type="button" class="rm" data-dup title="Dupliquer la ligne" aria-label="Dupliquer la ligne">${svg(ic.dup)}</button><button type="button" class="rm" data-rm title="Supprimer la ligne" aria-label="Supprimer la ligne">${svg(ic.x)}</button></td></tr>`;
+ }
+ // Regroupe les lignes consécutives qui ont la même catégorie
+ function groupCats(ls, composite = false) {
+@@ -183,7 +183,7 @@
+   }
+   return out;
+ }
+-const catBlock = (g) => `<section class="cat"><div class="cat-h"><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Nom de la catégorie (ex : Démolition, Plomberie…)" aria-label="Catégorie"><span class="num cat-sub" data-f="sub"></span><button type="button" class="rm" data-rmcat title="Supprimer la catégorie" aria-label="Supprimer la catégorie">${svg(ic.x)}</button></div>${cxCurK === "devis" && typeof mkCatFields === "function" ? mkCatFields(g) : ""}
++const catBlock = (g) => `<section class="cat"><div class="cat-h"><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Titre de la section (ex : Démolition, Plomberie…)" aria-label="Titre de la section"><span class="num cat-sub" data-f="sub"></span><button type="button" class="rm" data-rmcat title="Supprimer la catégorie" aria-label="Supprimer la catégorie">${svg(ic.x)}</button></div>${cxCurK === "devis" && typeof mkCatFields === "function" && db.v14 ? `<details class="cat-more"${g.lot || g.sous_lot || g.tranche || g.tranche_cond ? " open" : ""}><summary>Marché public : lot, sous-lot, tranche</summary>${mkCatFields(g)}</details>` : ""}
+   <div class="tw"><table class="lines"><thead><tr><th>Désignation</th><th>Qté</th><th>Unité</th><th>P.U. HT</th><th>TVA</th><th class="r">Total HT</th><th></th></tr></thead><tbody class="lb">${g.lignes.map(ligneRow).join("")}</tbody></table></div>
+   <button type="button" class="btn o sm" data-addl>+ Ajouter une ligne</button></section>`;
+ function readLignes(root) {
+@@ -236,6 +236,8 @@
+   const tp = sum($$(".lr", root), (tr) => (Number(tr.dataset.tp) || 0) * parseNum($('[data-f="qte"]', tr).value));
+   const ht = sum(Object.values(by), (x) => x.ht), tva = sum(Object.values(by), (x) => x.tva);
+   $("#totbox", root).innerHTML = `<div><span>Total HT</span><span class="num">${E2(ht)}</span></div>${Object.keys(by).sort((a, b) => b - a).map((t) => `<div><span>TVA ${String(t).replace(".", ",")} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}<div class="ttc"><span>Total TTC</span><span class="num">${E2(ht + tva)}</span></div>${tp > 0 ? `<div title="Information interne, non imprimée sur le document"><span>Temps de pose estimé</span><span class="num">${fmtNum(tp, 1)} h</span></div>` : ""}`;
++  const st = $("#edstat", root);
++  if (st) { const n = ls.filter((l) => (l.designation || l.prix_unitaire_ht) && l.type_ligne !== "image").length; st.innerHTML = n ? `<b>${n} prestation${n > 1 ? "s" : ""}</b> · HT ${E2(ht)} · <strong>TTC ${E2(ht + tva)}</strong>` : "Ajoutez au moins une prestation pour continuer."; }
+   if (cxCurK === "devis") cxAfterRecalc(root, ls);
+ }
+ // Les colonnes categorie / description sont écrites après l'enregistrement (par position)
+@@ -262,18 +264,28 @@
+   let preClient = opts.client || d?.client_id || "";
+   if (opts.chantier) preClient = byId(db.chantiers, opts.chantier)?.client_id || preClient;
+   const chOpts = (cid) => [{ v: "", l: "Sans chantier" }, ...db.chantiers.filter((c) => !cid || c.client_id === cid).map((c) => ({ v: c.id, l: c.nom }))];
+-  const body = `<datalist id="unites">${UNITES.map((u) => `<option value="${u}">`).join("")}</datalist><div class="frm">
+-    ${clientBlock(preClient)}
+-    ${fld({ k: "chantier_id", l: "Chantier", t: "select", o: chOpts(preClient || db.clients[0]?.id), v: opts.chantier || d?.chantier_id || "", r: 0 })}
+-    ${fld({ k: "date", l: K === "devis" ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
+-    ${K === "devis" ? fld({ k: "validite_jours", l: "Validité (jours)", t: "number", v: d?.validite_jours || 30 }) : fld({ k: "echeance", l: "Échéance de paiement", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}
+-    <div class="full"><div id="cats">${groupCats(lignes).map(catBlock).join("")}</div>
+-      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:10px;flex-wrap:wrap"><span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn o sm" id="addc">+ Ajouter une catégorie</button><button type="button" class="btn o sm" id="addov">Ajouter depuis la bibliothèque</button>${K === "facture" ? `<button type="button" class="btn o sm" id="addlibre">+ Poste libre</button>` : ""}${cxCurK === "devis" ? cxToolbar(K) : ""}</span><div class="totbox" id="totbox"></div></div></div>
+-    ${fld({ k: "notes", l: "Remarques (apparaissent sur le document)", t: "textarea", v: d?.notes || opts.notes || "", r: 0, cls: "full" })}
+-    ${K === "facture" && db.v8 && fxNat(d || {}) !== "Avoir" ? fxAdjFields(d ? fdOf(d.id) : {}) : ""}
++  const isD = K === "devis", noAvoir = K === "facture" && db.v8 && fxNat(d || {}) !== "Avoir";
++  const sec = (n, t, h, inner) => `<section class="eds"><h3><i>${n}</i>${t}</h3>${h ? `<p class="edh">${h}</p>` : ""}${inner}</section>`;
++  const body = `<datalist id="unites">${UNITES.map((u) => `<option value="${u}">`).join("")}</datalist><div class="ed">
++    ${sec(1, "Pour qui ?", isD ? "Choisissez le client (ou créez-le d'un clic) et, si besoin, le chantier concerné." : "Choisissez le client à facturer et, si besoin, le chantier concerné.", `<div class="frm">
++      ${clientBlock(preClient)}
++      ${fld({ k: "chantier_id", l: "Chantier (facultatif)", t: "select", o: chOpts(preClient || db.clients[0]?.id), v: opts.chantier || d?.chantier_id || "", r: 0 })}</div>`)}
++    ${sec(2, isD ? "Date et validité" : "Date et paiement", "", `<div class="frm">
++      ${fld({ k: "date", l: isD ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
++      ${isD ? `<div>${fld({ k: "validite_jours", l: "Valable pendant (jours)", t: "number", v: d?.validite_jours || 30 })}<div class="chips" data-chips="validite_jours">${[15, 30, 60, 90].map((n) => `<button type="button" class="chip-b" data-set="validite_jours" data-val="${n}">${n} jours</button>`).join("")}</div></div>`
++        : `<div>${fld({ k: "echeance", l: "À payer avant le", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}<div class="chips" data-chips="echeance">${[[0, "À réception"], [30, "30 jours"], [45, "45 jours"], [60, "60 jours"]].map(([n, l]) => `<button type="button" class="chip-b" data-days="${n}">${l}</button>`).join("")}</div></div>`}</div>`)}
++    ${sec(3, "Prestations", "Cherchez une prestation dans votre bibliothèque ou décrivez-la, puis réglez la quantité et le prix : les totaux se calculent seuls.", `
++      <div class="qadd"><div class="qin">${svg(ic.search)}<input id="qaq" type="text" autocomplete="off" placeholder="${isD ? "Que faut-il chiffrer" : "Que faut-il facturer"} ? Tapez « carrelage », « cloison »… puis Entrée" aria-label="Ajouter une prestation"><button type="button" class="btn sm" id="qaok">Ajouter</button></div><div id="qasug" class="qsug" hidden></div></div>
++      <div id="cats">${groupCats(lignes).map(catBlock).join("")}</div>
++      <div class="edtools"><span class="edt-l">Ajouter aussi :</span><button type="button" class="btn o sm" id="addc">Une section (ex : Plomberie)</button><button type="button" class="btn o sm" id="addov">Parcourir la bibliothèque</button>${K === "facture" ? `<button type="button" class="btn o sm" id="addlibre">Un poste libre (frais, remise…)</button>` : ""}${cxCurK === "devis" ? cxToolbar(K) : ""}</div>
++      <div class="totbox" id="totbox"></div>`)}
++    ${sec(4, "Remarques", "Ces remarques apparaissent sur le document. " + (isD ? "Vous pourrez ensuite le vérifier, l'envoyer au client ou le télécharger en PDF." : "Vous pourrez ensuite la vérifier, l'envoyer ou l'encaisser."), `<div class="frm">
++      ${fld({ k: "notes", l: "Remarques", t: "textarea", v: d?.notes || opts.notes || "", r: 0, cls: "full" })}
++      <div class="chips full"><span class="edt-l">Ajouter :</span>${(isD ? ["Acompte de 30 % à la signature du devis.", "Solde à la réception des travaux.", "Délai de démarrage à convenir avec le client."] : ["Règlement par virement bancaire.", "Solde à la réception des travaux.", "Aucun escompte pour paiement anticipé."]).map((t) => `<button type="button" class="chip-b" data-note="${esc(t)}">${esc(t.replace(/\.$/, ""))}</button>`).join("")}</div></div>
++      ${noAvoir ? `<details class="edadv"><summary>Retenue de garantie, acomptes, autoliquidation… (facultatif)</summary><div class="frm">${fxAdjFields(d ? fdOf(d.id) : {})}</div></details>` : ""}`)}
+   </div>`;
+-  modal(d ? `Modifier ${esc(docNum(d, K))}` : `Nouveau ${k.label.toLowerCase()}`, body, {
+-    xl: true, wide: true, submit: d ? "Enregistrer" : "Créer le brouillon",
++  modal(d ? `Modifier ${esc(docNum(d, K))}` : K === "devis" ? "Nouveau devis" : "Nouvelle facture", body, {
++    xl: true, wide: true, submit: d ? "Enregistrer" : "Créer le brouillon", extra: `<span id="edstat" class="edstat"></span>`,
+     onMount: (m) => {
+       bindClientBlock(m, (cid) => { const s = $("#f_chantier_id", m); s.innerHTML = chOpts(cid === "__new" ? "none" : cid).map((o) => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join(""); });
+       m.addEventListener("input", (e) => { if (e.target.closest(".cat")) recalcLignes(m); });
+@@ -291,6 +303,7 @@
+         recalcLignes(m);
+       });
+       recalcLignes(m);
++      if (typeof edEnhance === "function") edEnhance(m, K);
+       if (cxCurK === "devis") { cxEditorMount(m, K); if (opts.dictee) setTimeout(() => cxDictee(m), 80); }
+     },
+     onSubmit: async (v, api) => {
