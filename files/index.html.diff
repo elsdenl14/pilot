@@ -1,5 +1,5 @@
 --- ../../full/pilot-main/files/index.html	2026-11-16 02:05:45.000000000 +0000
-+++ ../../ia/src/index.html	2026-11-16 19:34:14.931828826 +0000
++++ ../../ia/src/index.html	2026-11-17 02:53:23.051292782 +0000
 @@ -16,8 +16,13 @@
        <main>
          <header class="top">
@@ -14,13 +14,14 @@
              <button class="ib" id="bell" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" title="Notifications"></button>
              <div id="notifpop" class="pop" hidden></div>
            </div>
-@@ -69,6 +74,10 @@
+@@ -69,6 +74,11 @@
      <script src="views-btp.js"></script>
      <script src="views-equipes.js"></script>
      <script src="views-stocks.js"></script>
 +    <script src="views-securite.js"></script>
 +    <script src="views-soustraitance.js"></script>
 +    <script src="views-moe.js"></script>
++    <script src="views-accueil-fin.js"></script>
 +    <script src="nav.js"></script>
      <script src="app.js"></script>
    </body>

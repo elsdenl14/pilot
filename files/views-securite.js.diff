@@ -1,0 +1,33 @@
+--- ../../full/pilot-main/files/views-securite.js	2026-11-16 02:05:45.000000000 +0000
++++ ../../ia/src/views-securite.js	2026-11-17 02:53:23.050681803 +0000
+@@ -114,7 +114,7 @@
+ };
+ 
+ /* ---------- Accueil personnalisable ---------- */
+-const HOME_W = [["kpi", "Indicateurs clés"], ["atraiter", "À traiter"], ["echeances", "Échéances des 14 jours"], ["chantiers", "Chantiers en cours"], ["devis", "Devis en attente de réponse"], ["collab", "Collaboration externe"], ["liens", "Liens consultés récemment"], ["rib", "Alerte coordonnées bancaires"]];
++const HOME_W = [["kpi", "Indicateurs clés"], ["finance", "Vue financière (graphique 12 mois)"], ["atraiter", "À traiter"], ["echeances", "Échéances des 14 jours"], ["chantiers", "Chantiers en cours"], ["devis", "Devis en attente de réponse"], ["collab", "Collaboration externe"], ["liens", "Liens consultés récemment"], ["rib", "Alerte coordonnées bancaires"]];
+ const HOME_DEF = { order: HOME_W.map((w) => w[0]), hidden: ["devis", "liens"] };
+ const homeKey = () => "accueil:" + roleActive();
+ function homeLayout() {
+@@ -136,6 +136,7 @@
+     if (permOk("ventes")) it.push(["CA du mois (HT)", E(c.caM), c.evo === null ? "pas de mois précédent" : `${c.evo >= 0 ? "+" : ""}${c.evo} % par rapport au mois précédent`, c.evo > 0 ? "up" : ""]);
+     return it.length ? strip(it) : "";
+   }
++  if (id === "finance") return permOk("banque") && typeof homeFinance === "function" ? homeFinance() : "";
+   if (id === "atraiter") {
+     const pr = c.pr, n = { u: pr.filter((p) => p.lv === "u").length, i: pr.filter((p) => p.lv === "i").length, s: pr.filter((p) => p.lv === "s").length };
+     return card("À traiter", pr.length ? pr.map(prioRow).join("") : `<div class="allgood"><b>Rien d'urgent.</b>Aucune facture en retard, aucun devis à relancer.</div>`,
+@@ -187,11 +188,11 @@
+   const lay = homeLayout(), ribOn = ribRecent().length > 0;
+   const shown = lay.order.filter((id) => !lay.hidden.includes(id) || (id === "rib" && ribOn));
+   const html = shown.map((id) => ({ id, h: homeWidget(id, c) })).filter((x) => x.h);
+-  const kpi = html.find((x) => x.id === "kpi"), rest = html.filter((x) => x.id !== "kpi");
++  const full = html.filter((x) => x.id === "kpi" || x.id === "finance").sort((a, b) => (a.id === "kpi" ? -1 : 1) - (b.id === "kpi" ? -1 : 1)), rest = html.filter((x) => x.id !== "kpi" && x.id !== "finance");
+   const d = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+   return page("Bonjour", `${d.charAt(0).toUpperCase() + d.slice(1)}. Voici ce qui demande une décision.`,
+     btn("Personnaliser", "homeCustom", "", "", "o") + (permOk("ventes") ? btn("Nouveau devis", "devisNew", "", "", "w") + btn("Nouvelle facture", "factureNew", "", "", "o w") : ""),
+-    `${kpi ? kpi.h : ""}<div class="acc-grid">${rest.map((x) => `<div class="acc-w" data-w="${x.id}">${x.h}</div>`).join("")}</div>`);
++    `${full.map((x) => `<div class="acc-full">${x.h}</div>`).join("")}<div class="acc-grid">${rest.map((x) => `<div class="acc-w" data-w="${x.id}">${x.h}</div>`).join("")}</div>`);
+ };
+ function homeCustom() {
+   const lay = homeLayout(), st = { order: [...lay.order], hidden: new Set(lay.hidden) };
