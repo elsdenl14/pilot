@@ -1,0 +1,9 @@
+{
+  "name": "Pilot terrain",
+  "short_name": "Pilot terrain",
+  "start_url": "./terrain.html",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#1f4fd8",
+  "icons": []
+}

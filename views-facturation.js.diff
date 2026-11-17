@@ -1,0 +1,29 @@
+--- main/pilot-main/files/views-facturation.js	2026-11-10 15:41:14.000000000 +0000
++++ out/views-facturation.js	2026-11-14 12:41:15.397789434 +0000
+@@ -150,7 +150,7 @@
+ 
+ /* ---------- Acompte ---------- */
+ async function fxAcompte(did, edit) {
+-  const d = byId(db.devis, did), lignes = await lignesOf("devis", did);
++  const d = byId(db.devis, did), lignes = cxBillable(await lignesOf("devis", did));
+   const rates = fxRates(lignes, d), ttcTotal = r2(sum(rates, (r) => r.ht * (1 + r.taux / 100)));
+   const fd = edit ? fdOf(edit.id) : null;
+   const left = r2(fxResteDevis(d) * (ttcTotal / (d.montant_ht || 1)) + (edit ? edit.montant_ttc : 0));
+@@ -207,7 +207,7 @@
+   return out;
+ }
+ async function fxSituation(did, nat, edit) {
+-  const d = byId(db.devis, did), lignes = await lignesOf("devis", did), detaille = nat === "Situation détaillée";
++  const d = byId(db.devis, did), lignes = cxBillable(await lignesOf("devis", did)), detaille = nat === "Situation détaillée";
+   const postes = fxPostes(lignes, d, detaille);
+   if (!postes.length) return toast("Ce devis n'a aucune ligne chiffrée : impossible de faire une situation.", "dn");
+   const prevInv = fxPrevSituations(did, edit?.id);
+@@ -265,7 +265,7 @@
+ 
+ /* ---------- Facture finale ---------- */
+ async function fxFinale(did, edit) {
+-  const d = byId(db.devis, did), dl = await lignesOf("devis", did);
++  const d = byId(db.devis, did), dl = cxBillable(await lignesOf("devis", did));
+   const prevs = fxLinked(did).filter((f) => f.id !== edit?.id && !fxIsAvoir(f) && fxNat(f) !== "Finale").sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+   const ded = [];
+   for (const p of prevs) {
