@@ -9,6 +9,14 @@ const setTh = (t) => {
   try { localStorage.setItem("pilot-th", t); } catch (e) {}
 };
 
+/* ---------- Effet verre (option, désactivé par défaut) ---------- */
+const getGlass = () => { try { return localStorage.getItem("pilot-glass") === "1"; } catch (e) { return false; } };
+const setGlass = (on) => {
+  document.documentElement.classList.toggle("glass", !!on);
+  try { localStorage.setItem("pilot-glass", on ? "1" : "0"); } catch (e) {}
+};
+document.documentElement.classList.toggle("glass", getGlass());
+
 /* ---------- Barre latérale (redimensionnable) ---------- */
 const SW = { min: 76, max: 360, def: 248, compact: 150 };
 function setSide(px, save = true) {
@@ -95,6 +103,7 @@ async function del(table, id, msg, after, done = "Supprimé.") {
 
 /* ---------- Actions (data-act) ---------- */
 const ACT = {
+  glassSet: (_v, _a, el) => setGlass(!!el.checked),
   ...(typeof achatActions !== "undefined" ? achatActions : {}),
   ...(typeof fileActions !== "undefined" ? fileActions : {}),
   ...(typeof banqueActions !== "undefined" ? banqueActions : {}),

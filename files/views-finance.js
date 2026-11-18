@@ -435,6 +435,7 @@ V.params = () => {
     ${rgRibCard()}
     ${typeof lgCard === "function" ? lgCard() : ""}
     ${typeof mlCard === "function" ? mlCard() : ""}
+    ${card("Apparence", `<div class="cb"><label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer"><input type="checkbox" data-chg="glassSet" ${getGlass() ? "checked" : ""} style="width:auto;margin-top:3px"><span><b>Effet verre léger</b><span class="mut" style="display:block">Surfaces légèrement translucides avec flou (cartes, barre du haut, menus, fenêtres). Réglage propre à cet appareil.</span></span></label></div>`)}
     ${card("Compte", `<dl class="kv"><dt>Connecté</dt><dd>${esc(email)}</dd></dl><div class="cb" style="border-top:1px solid var(--line2)">${btn("Se déconnecter", "logout", "", "", "o")}</div>`)}`);
 };
 const entPatch = async (patch) => {
