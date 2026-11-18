@@ -865,9 +865,7 @@ body { background: var(--bg); }
 .card, .strip, .doc, .kpi { border-radius: 8px; box-shadow: none; }
 .ch { border-bottom-color: var(--line); }
 
-/* Action principale en orange ; secondaires en contour sombre */
-.btn:not(.o):not(.dn-o) { background: var(--cta); border-color: var(--cta); color: #fff; }
-.btn:not(.o):not(.dn-o):hover { background: var(--cta-h); border-color: var(--cta-h); }
+/* Boutons : couleur d'accent d'origine ; secondaires en contour sombre */
 .btn.o { background: var(--panel); }
 :root[data-theme="dark"] .btn.o { border-color: #232c3d; }
 :root[data-theme="dark"] .btn.o:hover { background: #131a27; border-color: #33405a; }
@@ -901,3 +899,14 @@ tr.lnk:hover td { background: color-mix(in srgb, var(--tx) 4%, transparent); }
 /* Menus et fenêtres */
 .pop, .mc { border-radius: 10px; }
 .md { background: rgba(3, 6, 12, .6); }
+
+/* Bouton Assistant : léger halo qui respire, relief et étincelle au survol */
+.aifab { transition: transform .2s ease, box-shadow .2s ease, background .15s; isolation: isolate; }
+.aifab::before { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; background: inherit; opacity: .55; animation: aifab-halo 3.2s ease-out infinite; }
+.aifab:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(10, 20, 40, .38), 0 0 0 4px color-mix(in srgb, var(--acc) 22%, transparent); }
+.aifab:active { transform: translateY(0) scale(.98); }
+.aifab:hover svg { animation: aifab-spark .7s ease; }
+.aifab[aria-expanded="true"]::before { animation: none; opacity: 0; }
+@keyframes aifab-halo { 0% { transform: scale(1); opacity: .5; } 70%, 100% { transform: scale(1.28, 1.55); opacity: 0; } }
+@keyframes aifab-spark { 0% { transform: rotate(0) scale(1); } 40% { transform: rotate(18deg) scale(1.25); } 100% { transform: rotate(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .aifab::before, .aifab:hover svg { animation: none; } .aifab:hover { transform: none; } }
