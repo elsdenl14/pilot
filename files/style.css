@@ -979,3 +979,120 @@ h3.sect { margin: 22px 0 8px; font-size: 15px; font-weight: 650; }
 .pop hr { border: 0; border-top: 1px solid var(--line2); margin: 4px 0; }
 @media (max-width: 700px) { .socbar { grid-template-columns: 1fr; } .socbar b { text-align: left; } .socbtn { max-width: 130px; } }
 @media (min-width: 1100px) { .kpis.k5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* =====================================================================
+   DA « bleu marine & blanc crème » — #14213D (≈ 70 % de la surface : fond, cartes,
+   menu, barre du haut) et #F4EDE0 (≈ 30 % : texte, boutons, accents).
+   Thème sombre = thème par défaut (marine dominant). Le thème clair inverse
+   les proportions de fond mais garde menu et boutons en marine.
+   Couleurs uniquement : aucune taille ni disposition.
+   ===================================================================== */
+:root {
+  --navy: #14213D; --cream: #F4EDE0;
+  --bg: #F4EDE0; --panel: #FBF7EF; --sunk: #EDE4D2; --line: #D9CDB6; --line2: #E6DCC7;
+  --tx: #14213D; --mut: #4A5673; --faint: #7B8499;
+  --acc: #14213D; --acc-h: #1F3159; --accb: #E4DFD0; --on-acc: #F4EDE0;
+  --cta: #14213D; --cta-h: #1F3159;
+  --ok: #1D6B47; --okb: #DCEBD8; --wn: #8A5A0A; --wnb: #F6E6C2; --dn: #A8281D; --dnb: #F5D9D0;
+  --side: #14213D; --side2: #223560; --side-tx: #E6DECE; --side-mut: #98A1B6;
+  --card: var(--panel); --bg2: var(--sunk); --in: #FFFDF8;
+}
+:root[data-theme="dark"] {
+  --bg: #14213D; --panel: #1B2B4D; --sunk: #101B33; --line: #2D3F66; --line2: #233456;
+  --tx: #F4EDE0; --mut: #C2BCAF; --faint: #8F95A6;
+  --acc: #F4EDE0; --acc-h: #E6DCC6; --accb: #263A63; --on-acc: #14213D;
+  --cta: #F4EDE0; --cta-h: #E6DCC6;
+  --ok: #86D5AA; --okb: #1C3B3F; --wn: #EDC375; --wnb: #3B3524; --dn: #F5958B; --dnb: #46232C;
+  --side: #0F1A31; --side2: #1F3158; --side-tx: #E6DECE; --side-mut: #939CB2;
+  --card: var(--panel); --bg2: var(--sunk); --in: #101B33;
+}
+/* texte posé sur la couleur d'accent : suit le thème */
+.totaux .ttc, .doc .totaux .ttc, .totaux > .ttc, table.dt thead th { color: var(--on-acc); }
+.totaux .ttc span { color: inherit; }
+.logo i { background: #F4EDE0; color: #14213D; }
+.logo { color: #F4EDE0; }
+.nav:hover, .nav.dh.cur, .nav[aria-current="page"] { color: #F4EDE0; }
+.nav[aria-current="page"] { background: var(--side2); }
+:root[data-theme="dark"] .top { background: var(--bg); }
+:root[data-theme="dark"] .btn.o { border-color: var(--line); }
+:root[data-theme="dark"] .btn.o:hover { background: var(--sunk); border-color: var(--faint); }
+:root[data-theme="dark"] .av, .av { background: var(--accb); color: var(--tx); }
+.btn { color: var(--on-acc); }
+.btn.o { color: var(--tx); background: var(--panel); border-color: var(--line); }
+:root:not([data-theme="dark"]) .btn.o { color: var(--navy); border-color: var(--navy); }
+:root:not([data-theme="dark"]) .btn.o:hover { background: var(--accb); }
+.chip.ac, :root[data-theme="dark"] .chip.ac { background: var(--accb); color: var(--tx); }
+:root[data-theme="dark"] .chip.ok { background: var(--okb); color: var(--ok); }
+:root[data-theme="dark"] .chip.wn { background: var(--wnb); color: var(--wn); }
+:root[data-theme="dark"] .chip.dn { background: var(--dnb); color: var(--dn); }
+.chip.n { background: var(--line2); color: var(--mut); }
+.tabs button[aria-selected="true"], .seg button[aria-pressed="true"] { color: var(--tx); background: var(--accb); border-bottom-color: var(--acc); }
+a { color: var(--tx); text-decoration-color: color-mix(in srgb, var(--tx) 40%, transparent); }
+:root[data-theme="dark"] .toast.ok { background: #1F6B4B; }
+::selection { background: color-mix(in srgb, var(--tx) 25%, transparent); }
+.nav.sub { color: var(--side-tx); }
+.nav.sub:hover, .nav.sub[aria-current="page"] { color: #F4EDE0; }
+
+/* =====================================================================
+   DA v2 — marine 60 % · blanc 30 % · corail 10 % (boutons principaux uniquement)
+   Thème marine (défaut) : fond, menu et barre du haut en #14213D, cartes et fenêtres en blanc.
+   Thème clair : fond blanc, menu en marine. Le corail #FF6B5B est réservé aux boutons principaux.
+   ===================================================================== */
+:root {
+  --navy: #14213D; --coral: #FF6B5B; --coral-h: #FF8274;
+  --bg: #FAFAF8; --panel: #FFFFFF; --sunk: #F3F4F6; --line: #E1E4EA; --line2: #ECEEF2;
+  --tx: #14213D; --mut: #55617A; --faint: #8A93A6;
+  --acc: #14213D; --acc-h: #223560; --accb: #E8ECF4; --on-acc: #FFFFFF;
+  --cta: #FF6B5B; --cta-h: #FF8274;
+  --ok: #1D6B47; --okb: #DFF0E6; --wn: #8A5A0A; --wnb: #FBEBCB; --dn: #B3261E; --dnb: #FBE0DB;
+  --side: #14213D; --side2: #223560; --side-tx: #E6E9F0; --side-mut: #98A1B6;
+  --card: var(--panel); --bg2: var(--sunk); --in: #FFFFFF;
+}
+:root[data-theme="dark"] {
+  --bg: #14213D; --panel: #1B2B4D; --sunk: #101B33; --line: #2D3F66; --line2: #233456;
+  --tx: #F7F7F5; --mut: #C3C9D6; --faint: #8F98AB;
+  --acc: #F7F7F5; --acc-h: #FFFFFF; --accb: #263A63; --on-acc: #14213D;
+  --ok: #86D5AA; --okb: #1C3B3F; --wn: #EDC375; --wnb: #3B3524; --dn: #F5958B; --dnb: #46232C;
+  --side: #0F1A31; --side2: #1F3158; --side-tx: #E6E9F0; --side-mut: #939CB2;
+  --in: #101B33;
+}
+/* Surfaces blanches posées sur le fond marine */
+:root[data-theme="dark"] :is(.card, .strip, .doc, .kpi, .mc, .pop, .aip, .lines, .cat) {
+  --panel: #FFFFFF; --card: #FFFFFF; --sunk: #F3F4F6; --line: #E1E4EA; --line2: #ECEEF2; --in: #FFFFFF;
+  --tx: #14213D; --mut: #55617A; --faint: #8A93A6;
+  --acc: #14213D; --acc-h: #223560; --accb: #E8ECF4; --on-acc: #FFFFFF;
+  --ok: #1D6B47; --okb: #DFF0E6; --wn: #8A5A0A; --wnb: #FBEBCB; --dn: #B3261E; --dnb: #FBE0DB;
+  color: var(--tx);
+}
+:root[data-theme="dark"] .card, :root[data-theme="dark"] .strip, :root[data-theme="dark"] .doc, :root[data-theme="dark"] .kpi { background: #FFFFFF; border-color: #E1E4EA; }
+:root[data-theme="dark"] .mc, :root[data-theme="dark"] .pop { background: #FFFFFF; }
+
+/* Boutons principaux : corail (seul usage du corail) */
+.btn, .btn.w, a.btn { background: var(--coral); border-color: var(--coral); color: #14213D; font-weight: 650; }
+.btn:hover, a.btn:hover { background: var(--coral-h); border-color: var(--coral-h); color: #14213D; }
+.btn.o, a.btn.o, :root[data-theme="dark"] .btn.o { background: transparent; color: var(--tx); border-color: var(--line); font-weight: 600; }
+.btn.o:hover, a.btn.o:hover { background: var(--accb); border-color: var(--faint); color: var(--tx); }
+:root:not([data-theme="dark"]) .btn.o { color: var(--navy); border-color: #C9CFDB; }
+:root[data-theme="dark"] .top .btn.o, :root[data-theme="dark"] main > .ph .btn.o { border-color: #3A4E78; color: #F7F7F5; }
+:root[data-theme="dark"] main > .ph .btn.o:hover { background: #1F3158; }
+.btn.dng, .btn.o.dng { background: transparent; color: var(--dn); border-color: var(--dn); }
+.btn:disabled { opacity: .55; }
+.newbtn { background: var(--coral); border-color: var(--coral); color: #14213D; }
+.aifab { background: var(--coral); color: #14213D; }
+/* le reste : sans corail */
+.logo i { background: #FFFFFF; color: #14213D; }
+.nav:hover, .nav.dh.cur, .nav[aria-current="page"], .nav.sub:hover, .nav.sub[aria-current="page"], .logo { color: #FFFFFF; }
+:root[data-theme="dark"] .av, .av { background: var(--accb); color: var(--tx); }
+:root[data-theme="dark"] .top, :root[data-theme="dark"] .itabs { background: var(--bg); }
+.totaux .ttc, .doc .totaux .ttc, .totaux > .ttc { background: var(--navy); color: #FFFFFF; }
+:root[data-theme="dark"] .chip.ac, .chip.ac { background: var(--accb); color: var(--tx); }
+.tabs button[aria-selected="true"] { color: var(--tx); border-bottom-color: var(--tx); background: transparent; }
+:root[data-theme="dark"] main > .tabs button[aria-selected="true"], :root[data-theme="dark"] main > #v > .tabs button[aria-selected="true"] { color: #FFFFFF; border-bottom-color: #FFFFFF; }
+a { color: inherit; }
+
+/* DA v3 — sans corail : boutons principaux = blanc sur fond marine, marine sur surface blanche */
+:root { --coral: var(--acc); --coral-h: var(--acc-h); --cta: var(--acc); --cta-h: var(--acc-h); }
+.btn, .btn.w, a.btn, .newbtn, .aifab { background: var(--acc); border-color: var(--acc); color: var(--on-acc); }
+.btn:hover, a.btn:hover, .newbtn:hover { background: var(--acc-h); border-color: var(--acc-h); color: var(--on-acc); }
+.btn.o, a.btn.o, :root[data-theme="dark"] .btn.o { background: transparent; color: var(--tx); border-color: var(--line); }
+.btn.dng, .btn.o.dng { background: transparent; color: var(--dn); border-color: var(--dn); }
