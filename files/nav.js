@@ -28,14 +28,14 @@ const DOMAINS = [
   { id: "ventes", label: "Ventes", icon: "d_ventes", items: [
     ["clients", "Clients", "contacts"], ["devis", "Devis", "propositions"], ["factures", "Factures", "facturation situations avoirs acomptes"],
     ["efacture", "Facture électronique", "chorus factur-x"], ["marches", "Marchés et analyses", "appels d'offres études de prix chiffrage"],
-    ["ouvrages", "Bibliothèque d'ouvrages", "prix catalogue bordereau"], ["liens", "Liens partagés", "suivi consultation"], ["moe", "Maîtrise d'œuvre", "architecte moe"],
+    ["contrats", "Contrats d'entretien", "maintenance renouvellement visites récurrent"], ["ouvrages", "Bibliothèque d'ouvrages", "prix catalogue bordereau"], ["liens", "Liens partagés", "suivi consultation"], ["moe", "Maîtrise d'œuvre", "architecte moe"],
   ] },
   { id: "chantiers", label: "Chantiers", icon: "d_chantiers", items: [
-    ["chantiers", "Chantiers", "projets"], ["carte", "Carte des chantiers", "plan localisation gps adresse avancement"], ["journal", "Journal de chantier", "carnet de bord météo photos rapport quotidien"], ["planning", "Planning", "calendrier"], ["temps", "Temps passés", "heures"],
+    ["chantiers", "Chantiers", "projets"], ["interventions", "Bons d'intervention", "dépannage sav technicien photos signature"], ["livraisons", "Bons de livraison", "livrer matériel réception reliquat"], ["carte", "Carte des chantiers", "plan localisation gps adresse avancement"], ["journal", "Journal de chantier", "carnet de bord météo photos rapport quotidien"], ["planning", "Planning", "calendrier"], ["temps", "Temps passés", "heures"],
     ["pv", "PV de réception", "réception réserves"], ["notes", "Notes", "carnet"],
   ] },
   { id: "achats", label: "Achats", icon: "achats", items: [
-    ["achats", "Achats et commandes", "bons de commande bc"], ["fournisseurs", "Fournisseurs", ""], ["depenses", "Dépenses", "frais"],
+    ["comparateur", "Comparateur fournisseurs", "demande de prix devis fournisseurs meilleur prix délai"], ["achats", "Achats et commandes", "bons de commande bc"], ["fournisseurs", "Fournisseurs", ""], ["depenses", "Dépenses", "frais"],
     ["rapprochement", "Rapprochement", "livraison facture fournisseur"], ["soustraitants", "Sous-traitants", ""],
     ["stdossiers", "Dossiers sous-traitance", "contrats"], ["stsituations", "Situations sous-traitants", "paiement direct"], ["stoffres", "Appels d'offres sous-traitance", "consultation"],
   ] },
@@ -49,13 +49,13 @@ const DOMAINS = [
     ["paiements", "Paiements", "encaissements banque"], ["tresorerie", "Trésorerie prévue", "prévisionnel"], ["compta", "Comptabilité", "export fec tva"],
   ] },
   { id: "pilotage", label: "Pilotage", icon: "d_pilotage", items: [
-    ["tbchantiers", "Tableau de bord chantiers", "budget marge heures alertes rentabilité"], ["analyses", "Analyses", "statistiques"], ["rentabilite", "Rentabilité", "marges"], ["objectifs", "Objectifs", "budget"],
+    ["consolide", "Vue consolidée", "sociétés entreprises groupe"], ["tbchantiers", "Tableau de bord chantiers", "budget marge heures alertes rentabilité"], ["analyses", "Analyses", "statistiques"], ["rentabilite", "Rentabilité", "marges"], ["objectifs", "Objectifs", "budget"],
   ] },
   { id: "documents", label: "Documents et échanges", icon: "d_documents", items: [
     ["documents", "Documents", "fichiers pièces"], ["mails", "Messagerie", "emails gmail"],
   ] },
   { id: "admin", label: "Administration", icon: "d_admin", bottom: true, items: [
-    ["params", "Paramètres", "entreprise réglages"], ["roles", "Sécurité et rôles", "permissions profils rib"],
+    ["params", "Paramètres", "entreprise réglages"], ["societes", "Sociétés", "multi entreprises dossiers"], ["perso", "Personnalisation", "champs statuts modèles vues"], ["roles", "Sécurité et rôles", "permissions profils rib"],
   ] },
 ];
 /* pages qui vivent dans un autre écran : clé → page du menu à mettre en surbrillance */
@@ -174,9 +174,9 @@ function navSearchClose() { $("#cmdk")?.remove(); }
 
 /* ---------- Menu « Nouveau » ---------- */
 const NAV_NEW = [
-  ["Ventes", [["Devis", "devisNew", "devis"], ["Facture", "factureNew", "factures"], ["Client", "clientNew", "clients"]]],
+  ["Ventes", [["Devis", "devisNew", "devis"], ["Facture", "factureNew", "factures"], ["Client", "clientNew", "clients"], ["Contrat d'entretien", "ctNew", "contrats"], ["Bon d'intervention", "ivNew", "interventions"]]],
   ["Chantiers", [["Chantier", "chantierNew", "chantiers"], ["Note", "ntNew", "notes"]]],
-  ["Achats", [["Bon de commande", "bcNew", "achats"], ["Dépense", "depNew", "depenses"], ["Fournisseur", "fournisseurNew", "fournisseurs"]]],
+  ["Achats", [["Demande de prix", "dpNew", "comparateur"], ["Bon de livraison", "blNew", "livraisons"], ["Bon de commande", "bcNew", "achats"], ["Dépense", "depNew", "depenses"], ["Fournisseur", "fournisseurNew", "fournisseurs"]]],
   ["Équipes", [["Salarié", "eqSalNew", "equipes"], ["Pointage", "ptNew", "pointages"]]],
 ];
 function navNewHtml() {

@@ -910,3 +910,72 @@ tr.lnk:hover td { background: color-mix(in srgb, var(--tx) 4%, transparent); }
 @keyframes aifab-halo { 0% { transform: scale(1); opacity: .5; } 70%, 100% { transform: scale(1.28, 1.55); opacity: 0; } }
 @keyframes aifab-spark { 0% { transform: rotate(0) scale(1); } 40% { transform: rotate(18deg) scale(1.25); } 100% { transform: rotate(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .aifab::before, .aifab:hover svg { animation: none; } .aifab:hover { transform: none; } }
+
+/* ===== v21 : contrats, interventions, comparateur, livraisons, sociétés, personnalisation ===== */
+.empty-state { border: 1px dashed var(--line); border-radius: 10px; padding: 26px 20px; text-align: center; color: var(--mut); background: var(--sunk); }
+.empty-state b { display: block; color: var(--tx); margin-bottom: 6px; font-size: 16px; }
+.pad { padding: 14px 18px; }
+h3.sect { margin: 22px 0 8px; font-size: 15px; font-weight: 650; }
+.totaux { margin: 12px 18px 14px auto; width: min(320px, calc(100% - 36px)); }
+.totaux > div { display: flex; justify-content: space-between; padding: 4px 0; color: var(--mut); }
+.totaux > .ttc { color: #fff; }
+.more { position: relative; display: inline-block; }
+.more > summary { list-style: none; cursor: pointer; }
+.more > summary::-webkit-details-marker { display: none; }
+.more .mm { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.14); padding: 4px 0; }
+.more .mi { display: block; width: 100%; text-align: left; padding: 9px 14px; border: 0; background: none; color: var(--tx); font: inherit; cursor: pointer; }
+.more .mi:hover { background: var(--sunk); }
+.more .mi.dng { color: var(--dn); }
+.ivt { width: 100%; border-collapse: collapse; }
+.ivt th { text-align: left; font-size: 12px; color: var(--mut); font-weight: 600; padding: 4px 6px; }
+.ivt td { padding: 3px 4px; }
+.ivt input { width: 100%; min-width: 60px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--in); color: var(--tx); font: inherit; }
+.ivt .rm, .chip .rm { border: 0; background: none; color: var(--faint); cursor: pointer; padding: 0 4px; font-size: 15px; line-height: 1; }
+.ivt .rm:hover, .chip .rm:hover { color: var(--dn); }
+.ivt .rm svg { width: 15px; height: 15px; }
+.iv-ph { display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 18px; min-height: 40px; }
+.iv-ph figure { position: relative; margin: 0; }
+.iv-ph img { width: 130px; height: 100px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: var(--sunk); display: block; }
+.iv-ph .rm { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.iv-ph .rm svg { width: 13px; height: 13px; }
+.iv-sig { max-width: 260px; width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 6px; display: block; margin-bottom: 8px; }
+.sigpad { width: 100%; height: 160px; border: 1.5px dashed var(--faint); border-radius: 8px; background: #fff; touch-action: none; display: block; margin-bottom: 8px; }
+.chk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.chk { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunk); }
+.dpmail { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line2); flex-wrap: wrap; }
+.dpmail small { display: block; color: var(--mut); }
+.cmp { width: 100%; border-collapse: collapse; min-width: 520px; }
+.cmp th, .cmp td { padding: 9px 12px; border-bottom: 1px solid var(--line2); vertical-align: top; }
+.cmp thead th { background: var(--sunk); font-weight: 650; }
+.cmp small { display: block; color: var(--mut); font-weight: 500; font-size: 11.5px; }
+.cmp small.ok { color: var(--ok); font-weight: 650; } .cmp small.dn { color: var(--dn); }
+.cmp .cmp-h.win { box-shadow: inset 0 3px 0 var(--ok); }
+.cmp .cmp-b { margin-top: 6px; }
+.cmp td.cmp-best { background: var(--okb); color: var(--ok); font-weight: 650; }
+.cmp .cmp-f td { color: var(--mut); }
+.cmp .cmp-t td { font-weight: 700; border-top: 2px solid var(--line); }
+.dpv { display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: center; padding: 16px 18px; }
+.dpv small { display: block; color: var(--mut); font-size: 12px; }
+.dpv b { font-size: 18px; display: block; }
+.dpv .pri { display: grid; gap: 4px; min-width: 200px; }
+.dpv .pri small { display: flex; justify-content: space-between; }
+.rank { margin: 0; padding: 0 18px 16px 38px; color: var(--mut); }
+.rank li { padding: 3px 0; } .rank b { color: var(--tx); }
+.bar { display: block; width: 110px; height: 8px; border-radius: 4px; background: var(--line2); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--acc); }
+.socbar { display: grid; grid-template-columns: 150px minmax(0, 1fr) 110px; gap: 10px; align-items: center; padding: 5px 0; }
+.socbar > div { display: grid; gap: 3px; }
+.socbar i { display: block; height: 9px; border-radius: 4px; min-width: 2px; }
+.socbar i.a, .lg.a { background: var(--acc); } .socbar i.b, .lg.b { background: var(--wn); }
+.socbar b { text-align: right; }
+.lg { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 12px; vertical-align: middle; }
+.kpis + .card, .kpis + section { margin-top: 16px; }
+.card + h3.sect { margin-top: 24px; }
+.socbtn { display: inline-flex; align-items: center; gap: 8px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.socdot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.tplsel { width: 100%; margin: 0 0 10px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--in); color: var(--tx); font: inherit; }
+#vuesw { position: relative; }
+#vuesp { right: 0; }
+.pop hr { border: 0; border-top: 1px solid var(--line2); margin: 4px 0; }
+@media (max-width: 700px) { .socbar { grid-template-columns: 1fr; } .socbar b { text-align: left; } .socbtn { max-width: 130px; } }
+@media (min-width: 1100px) { .kpis.k5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }

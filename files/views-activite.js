@@ -66,6 +66,7 @@ function priorites() {
   if (typeof ressPriorites === "function") ressPriorites(add, t);
   if (typeof stoPriorites === "function") stoPriorites(add, t);
   if (typeof moePriorites === "function") moePriorites(add, t);
+  if (typeof v21Priorites === "function") v21Priorites(add, t);
   for (const f of ouvertes()) {
     const d = daysBetween(t, f.echeance);
     if (d >= 0 && d <= 7)

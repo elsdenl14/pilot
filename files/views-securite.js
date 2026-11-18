@@ -39,7 +39,7 @@ const PROFIL_DEF = {
 };
 const PAGE_PERM = { rentabilite: "marges", analyses: "marges", objectifs: "marges", marches: "marges", paiements: "banque", tresorerie: "banque", compta: "compta", efacture: "compta",
   pointages: "rh", equipes: "rh", params: "params", roles: "params", devis: "ventes", factures: "ventes", clients: "ventes", moe: "ventes", liens: "ventes", mails: "ventes", ouvrages: "ventes",
-  achats: "achats", fournisseurs: "achats", bc: "achats", rapprochement: "achats", depenses: "achats", soustraitants: "achats", stdossiers: "achats", stsituations: "achats", stoffres: "achats" };
+  contrats: "ventes", interventions: "ventes", livraisons: "ventes", consolide: "marges", societes: "params", perso: "params", comparateur: "achats", achats: "achats", fournisseurs: "achats", bc: "achats", rapprochement: "achats", depenses: "achats", soustraitants: "achats", stdossiers: "achats", stsituations: "achats", stoffres: "achats" };
 function roleActive() { let p = "dirigeant"; try { p = localStorage.getItem("pilot-profil") || "dirigeant"; } catch (e) {} return PROFILS[p] ? p : "dirigeant"; }
 const roleCfg = () => prefGet("roles", {}) || {};
 function permOk(k) {
