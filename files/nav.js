@@ -49,7 +49,7 @@ const DOMAINS = [
     ["paiements", "Paiements", "encaissements banque"], ["tresorerie", "Trésorerie prévue", "prévisionnel"], ["compta", "Comptabilité", "export fec tva"],
   ] },
   { id: "pilotage", label: "Pilotage", icon: "d_pilotage", items: [
-    ["consolide", "Vue consolidée", "sociétés entreprises groupe"], ["tbchantiers", "Tableau de bord chantiers", "budget marge heures alertes rentabilité"], ["analyses", "Analyses", "statistiques"], ["rentabilite", "Rentabilité", "marges"], ["objectifs", "Objectifs", "budget"],
+    ["consolide", "Vue consolidée", "sociétés entreprises groupe"], ["tbchantiers", "Tableau de bord chantiers", "budget marge heures alertes rentabilité"], ["risques", "Risques et prévisions", "dépassement budget retard marge finale déficit dépenses anormales heures supplémentaires prévision"], ["analyses", "Analyses", "statistiques"], ["rentabilite", "Rentabilité", "marges"], ["objectifs", "Objectifs", "budget"],
   ] },
   { id: "documents", label: "Documents et échanges", icon: "d_documents", items: [
     ["documents", "Documents", "fichiers pièces"], ["mails", "Messagerie", "emails gmail"],

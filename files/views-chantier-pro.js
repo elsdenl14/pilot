@@ -404,6 +404,7 @@ function aiContext() {
     if (marges) Object.assign(o, { marche_ht: d.base, facture_ht: d.factureHT, couts_reels_ht: d.couts, budget_prevu_ht: d.budget || null, marge_brute: d.margeBrute, marge_brute_pct: d.pctBrute, marge_nette: d.margeNette, marge_nette_pct: d.pctNette, verdict: d.verdict.l, alertes: d.alerts.filter((a) => a.lv !== "n").map((a) => `${a.t} : ${a.d}`) });
     return o;
   });
+  if (marges && typeof rkAiNote === "function") ctx.previsions_risques = rkAiNote();
   if (db.v17) ctx.journal_recent = db.jr.slice(0, 12).map((j) => ({ chantier: jrChNom(j.chantier_id), jour: j.date_jour, meteo: j.meteo, conditions: j.conditions, equipe: j.effectifs.length, travaux: (j.travaux || "").slice(0, 200), incidents: (j.incidents || "").slice(0, 200) || null }));
   return ctx;
 }

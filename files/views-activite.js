@@ -66,6 +66,7 @@ function priorites() {
   if (typeof ressPriorites === "function") ressPriorites(add, t);
   if (typeof stoPriorites === "function") stoPriorites(add, t);
   if (typeof moePriorites === "function") moePriorites(add, t);
+  if (typeof rkPriorites === "function") rkPriorites(add, t);
   if (typeof v21Priorites === "function") v21Priorites(add, t);
   for (const f of ouvertes()) {
     const d = daysBetween(t, f.echeance);
@@ -242,7 +243,7 @@ function chantierDetail(id) {
   const devis = db.devis.filter((d) => d.chantier_id === id), fact = db.factures.filter((f) => f.chantier_id === id), deps = db.depenses.filter((d) => d.chantier_id === id);
   return page(`${esc(c.nom)} ${chip(c.statut)}`, `${esc(c.client_nom)}${c.ville ? " · " + esc(c.ville) : ""}`,
     btn("Modifier", "chantierEdit", id, "", "o w") + btn("Nouveau devis", "devisNew", "", "chantier:" + id, "w") + btn("Nouvelle facture", "factureNew", "", "chantier:" + id, "o w") + btn("Supprimer", "chantierDel", id, "", "dn-o w"),
-    `${typeof chDashHtml === "function" ? chDashHtml(c) : ""}${db.v5 ? finCard(c) : strip([
+    `${typeof chDashHtml === "function" ? chDashHtml(c) : ""}${typeof rkChantierHtml === "function" ? rkChantierHtml(c) : ""}${db.v5 ? finCard(c) : strip([
       ["Marché", E(c.montant_marche), "montant convenu"],
       ["Facturé HT", E(s.factureHT), `${E(s.encaisse)} encaissés (TTC)`],
       ["Coûts HT", E(s.couts), `${deps.length} dépense${deps.length > 1 ? "s" : ""} rattachée${deps.length > 1 ? "s" : ""}`],
