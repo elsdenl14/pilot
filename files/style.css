@@ -1096,3 +1096,22 @@ a { color: inherit; }
 .btn:hover, a.btn:hover, .newbtn:hover { background: var(--acc-h); border-color: var(--acc-h); color: var(--on-acc); }
 .btn.o, a.btn.o, :root[data-theme="dark"] .btn.o { background: transparent; color: var(--tx); border-color: var(--line); }
 .btn.dng, .btn.o.dng { background: transparent; color: var(--dn); border-color: var(--dn); }
+
+/* DA v4 — surfaces en blanc bleuté (moins de contraste avec le marine) */
+:root[data-theme="dark"] :is(.card, .strip, .doc, .kpi, .mc, .pop, .aip, .lines, .cat) {
+  --panel: #E7EBF3; --card: #E7EBF3; --sunk: #DCE2EE; --line: #C8D0E0; --line2: #D6DCE9; --in: #F3F5FA;
+  --mut: #4C5976; --faint: #7A869E; --accb: #D5DCEB;
+  --okb: #D3E8DD; --wnb: #F3E5C3; --dnb: #F3D7D4;
+}
+:root[data-theme="dark"] .card, :root[data-theme="dark"] .strip, :root[data-theme="dark"] .doc, :root[data-theme="dark"] .kpi { background: #E7EBF3; border-color: #3A4D78; }
+:root[data-theme="dark"] .mc, :root[data-theme="dark"] .pop { background: #E7EBF3; }
+:root[data-theme="dark"] .iv-sig, :root[data-theme="dark"] .sigpad { background: #fff; }
+
+/* DA v5 — boutons principaux : le bleu d'origine */
+.btn, .btn.w, a.btn, .newbtn, .aifab { background: #2f63c4; border-color: #2f63c4; color: #fff; }
+.btn:hover, a.btn:hover, .newbtn:hover { background: #254fa0; border-color: #254fa0; color: #fff; }
+:root[data-theme="dark"] .btn, :root[data-theme="dark"] .btn.w, :root[data-theme="dark"] a.btn, :root[data-theme="dark"] .newbtn, :root[data-theme="dark"] .aifab { background: #6ea2e6; border-color: #6ea2e6; color: #0b1626; }
+:root[data-theme="dark"] .btn:hover, :root[data-theme="dark"] a.btn:hover, :root[data-theme="dark"] .newbtn:hover { background: #8bb7f0; border-color: #8bb7f0; color: #0b1626; }
+.btn.o, a.btn.o, :root[data-theme="dark"] .btn.o { background: transparent; color: var(--tx); border-color: var(--line); }
+.btn.o:hover, a.btn.o:hover { background: var(--accb); color: var(--tx); border-color: var(--faint); }
+.btn.dng, .btn.o.dng { background: transparent; color: var(--dn); border-color: var(--dn); }
