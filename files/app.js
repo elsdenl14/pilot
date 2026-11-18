@@ -2,7 +2,7 @@
 
 /* ---------- Thème ---------- */
 let th = "light";
-try { th = localStorage.getItem("pilot-th") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch (e) {}
+try { th = localStorage.getItem("pilot-th") || "dark"; } catch (e) {}
 const setTh = (t) => {
   th = t;
   document.documentElement.dataset.theme = t;
