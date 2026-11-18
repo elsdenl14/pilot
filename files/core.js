@@ -117,6 +117,7 @@ async function load() {
   try { if (typeof loadV14 === "function") await loadV14(); } catch (e) { db.v14 = false; db.v14err = e?.message || String(e); console.warn(e); }
   try { if (typeof loadV15 === "function") await loadV15(); } catch (e) { db.v15 = false; db.v15err = e?.message || String(e); console.warn(e); }
   try { if (typeof loadV16 === "function") await loadV16(); } catch (e) { db.v16 = false; db.v16err = e?.message || String(e); console.warn(e); }
+  try { if (typeof loadV18 === "function") await loadV18(); } catch (e) { db.v18 = false; console.warn(e); }
   try { if (typeof loadV17 === "function") await loadV17(); } catch (e) { db.v17 = false; db.v17err = e?.message || String(e); console.warn(e); }
   try { if (typeof loadV10 === "function") await loadV10(); } catch (e) { db.v10 = false; console.warn(e); }
   try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }

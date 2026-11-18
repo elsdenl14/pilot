@@ -129,6 +129,7 @@ const ACT = {
   ...(typeof sousTraitanceActions !== "undefined" ? sousTraitanceActions : {}),
   ...(typeof moeActions !== "undefined" ? moeActions : {}),
   ...(typeof chProActions !== "undefined" ? chProActions : {}),
+  ...(typeof carteActions !== "undefined" ? carteActions : {}),
   tab: (id, arg) => { ST.tab[id] = arg; return render(true); },
   period: (id, arg) => { ST.period = arg; return render(true); },
   gran: (id, arg) => { ST.gran = arg; return render(true); },
