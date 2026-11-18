@@ -809,3 +809,95 @@ html.glass .st { background: transparent; }
 html.glass .st + .st { border-left: 1px solid var(--line); }
 html.glass .top { background: color-mix(in srgb, var(--panel) 74%, transparent); -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%); }
 html.glass .pop, html.glass .mc { background: color-mix(in srgb, var(--panel) 90%, transparent); -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%); }
+
+/* =====================================================================
+   DA « graphite & orange » — fond bleu nuit très sombre, cartes plates
+   à bordure fine, action principale orange, liens bleus, états lisibles.
+   Couleurs, rayons et ombres uniquement : aucune taille ni disposition.
+   ===================================================================== */
+:root {
+  --bg: #f4f5f8;
+  --panel: #ffffff;
+  --sunk: #f8f9fb;
+  --line: #e3e6ec;
+  --line2: #eceff4;
+  --tx: #111827;
+  --mut: #5d6677;
+  --faint: #8a93a3;
+  --acc: #2f63c4;
+  --acc-h: #254fa0;
+  --accb: #e8effb;
+  --cta: #d9541e;
+  --cta-h: #bf4614;
+  --ok: #17785a;  --okb: #e1f3ec;
+  --wn: #b45309;  --wnb: #fdecd8;
+  --dn: #c0362c;  --dnb: #fdeceb;
+  --side: #0e1522;
+  --side2: #172033;
+  --side-tx: #c3cbd9;
+  --side-mut: #7a869b;
+}
+:root[data-theme="dark"] {
+  --bg: #090d14;
+  --panel: #0f1520;
+  --sunk: #0c111a;
+  --line: #1c2433;
+  --line2: #161d2a;
+  --tx: #e7eaf0;
+  --mut: #8e98a9;
+  --faint: #667184;
+  --acc: #6ea2e6;
+  --acc-h: #8bb7f0;
+  --accb: #14233d;
+  --cta: #d9541e;
+  --cta-h: #e8642d;
+  --ok: #4fd1a1;  --okb: #0f3a2f;
+  --wn: #f0a15e;  --wnb: #3a2312;
+  --dn: #f1867c;  --dnb: #36191a;
+  --side: #0b1019;
+  --side2: #141b28;
+  --side-tx: #b6bfcf;
+  --side-mut: #667184;
+}
+body { background: var(--bg); }
+
+/* Cartes plates, bord fin */
+.card, .strip, .doc, .kpi { border-radius: 8px; box-shadow: none; }
+.ch { border-bottom-color: var(--line); }
+
+/* Action principale en orange ; secondaires en contour sombre */
+.btn:not(.o):not(.dn-o) { background: var(--cta); border-color: var(--cta); color: #fff; }
+.btn:not(.o):not(.dn-o):hover { background: var(--cta-h); border-color: var(--cta-h); }
+.btn.o { background: var(--panel); }
+:root[data-theme="dark"] .btn.o { border-color: #232c3d; }
+:root[data-theme="dark"] .btn.o:hover { background: #131a27; border-color: #33405a; }
+.seg button[aria-pressed="true"] { background: var(--accb); color: var(--acc); }
+input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--acc) 22%, transparent); }
+
+/* Menu latéral : actif discret */
+aside { border-right: 1px solid var(--line); }
+:root[data-theme="dark"] aside { background: var(--side); }
+.nav[aria-current="page"] { background: var(--side2); color: #fff; }
+.nav:hover { background: rgba(255, 255, 255, .05); }
+.logo i { background: #f1f4f9; color: #0e1522; }
+
+/* Barre du haut et recherche */
+:root[data-theme="dark"] .top { background: var(--bg); }
+.cmdbtn { background: transparent; border-color: var(--line); }
+:root[data-theme="dark"] .av { background: #162744; color: #8fb6f0; }
+
+/* États : pastilles nettes, vertes pleines pour « en cours / ok » */
+.chip { font-weight: 600; }
+:root[data-theme="dark"] .chip.ok { background: #0f6b52; color: #d6f7ea; }
+:root[data-theme="dark"] .chip.wn { background: #3f2610; color: #f4b274; }
+:root[data-theme="dark"] .chip.dn { background: #3b1b1c; color: #f6a39b; }
+:root[data-theme="dark"] .chip.ac { background: #152846; color: #8fb6f0; }
+.chip.n { background: var(--line2); }
+
+/* Tableaux : lignes fines */
+th { background: var(--sunk); color: var(--faint); }
+tr.lnk:hover td { background: color-mix(in srgb, var(--tx) 4%, transparent); }
+
+/* Menus et fenêtres */
+.pop, .mc { border-radius: 10px; }
+.md { background: rgba(3, 6, 12, .6); }
