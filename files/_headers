@@ -1,0 +1,16 @@
+# En-têtes de sécurité HTTP pour Cloudflare Workers (Static Assets).
+# À placer dans le dossier "files/" (racine du site déployé), au même niveau que config.js.
+# Cloudflare lit ce fichier automatiquement au déploiement — rien d'autre à configurer.
+#
+# La Content-Security-Policy ci-dessous a été vérifiée contre les appels réseau
+# réels du code (Supabase, Stripe, Google OAuth/Gmail, météo Open-Meteo, cartes
+# OpenStreetMap/Leaflet). Si tu ajoutes un nouveau service externe plus tard,
+# il faudra l'ajouter ici aussi, sinon le navigateur le bloquera silencieusement.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  Permissions-Policy: geolocation=(self), camera=(), microphone=()
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://*.supabase.co https://accounts.google.com https://oauth2.googleapis.com https://gmail.googleapis.com https://api.stripe.com https://geocoding-api.open-meteo.com https://api.open-meteo.com https://archive-api.open-meteo.com https://tile.openstreetmap.org; worker-src 'self'

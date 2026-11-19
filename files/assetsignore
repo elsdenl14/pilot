@@ -1,0 +1,19 @@
+# Empêche Cloudflare Workers de servir ces fichiers comme assets publics.
+# À placer dans le dossier "files/" (racine du site déployé), au même niveau que config.js.
+# Après l'avoir ajouté : commit, push, puis redéployer (wrangler deploy ou via le dashboard)
+# pour que les anciens fichiers déjà publiés disparaissent vraiment.
+
+# Schéma et migrations de la base de données — ne doivent jamais être publics
+supabase/
+migration_v*.sql
+
+# Documentation et notes internes — pas destinées aux visiteurs du site
+LISEZMOI_*.md
+ASSISTANT_IA.md
+GMAIL.md
+PAIEMENT_EN_LIGNE.md
+LICENSE
+
+# Fichiers de travail (diffs, patches) qui n'ont rien à faire sur le site en prod
+*.diff
+patches v13/
