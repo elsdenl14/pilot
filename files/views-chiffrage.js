@@ -240,11 +240,11 @@ async function cxCompress(file, max = 1400) {
   } finally { URL.revokeObjectURL(url); }
 }
 function cxImageRow(l = {}) {
-  return `<tr class="lr lr-img" data-nat="normale" data-ref="" data-tp="" data-type="image" data-img="${esc(l.image_path || "")}"><td colspan="6">
+  return `<tr class="lr lr-img" data-nat="normale" data-ref="" data-tp="" data-type="image" data-img="${esc(l.image_path || "")}"><td class="ln"><span class="dg-h" data-drag title="Glisser pour déplacer" aria-label="Déplacer l'image">⋮⋮</span></td><td colspan="6">
     <img class="cx-img" alt="" data-path="${esc(l.image_path || "")}">
     <input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="Légende de l'image (facultatif)">
     <input type="hidden" data-f="desc" value=""><input type="hidden" data-f="qte" value="1"><input type="hidden" data-f="uni" value="u"><input type="hidden" data-f="pu" value="0"><input type="hidden" data-f="tva" value="${l.taux_tva ?? 20}"><span class="lt" hidden><span data-f="tot">0,00</span></span></td>
-    <td style="width:34px"><button type="button" class="rm" data-rm title="Supprimer l'image" aria-label="Supprimer l'image">${svg(ic.x)}</button></td></tr>`;
+    <td class="lact"><button type="button" class="rm" data-rm title="Supprimer l'image" aria-label="Supprimer l'image">${svg(ic.x)}</button></td></tr>`;
 }
 async function cxLoadImgs(root) {
   for (const im of $$("img[data-path]", root)) {
@@ -510,7 +510,7 @@ async function loadV13() {
 
 /* ---------- Aides diverses ---------- */
 // Lignes qu'on peut facturer : sans images ni options non retenues
-const cxBillable = (ls) => ls.filter((l) => l.type_ligne !== "image" && (!l.est_option || l.option_choisie) && !(l.tranche_cond && !l.tranche_ok));
+const cxBillable = (ls) => ls.filter((l) => l.type_ligne !== "image" && l.nature !== "saut" && (!l.est_option || l.option_choisie) && !(l.tranche_cond && !l.tranche_ok));
 // Aperçu à l'écran : les images ne sont pas listées, les options sont repérées
 const cxPreviewLignes = (ls) => ls.filter((l) => l.type_ligne !== "image").map((l) => (l.est_option ? { ...l, designation: `${l.designation} (option ${l.option_choisie ? "retenue" : "non retenue"})` } : l.tranche_cond && !l.tranche_ok ? { ...l, designation: `${l.designation} (tranche conditionnelle non affermie)` } : l));
 // Ligne de la fiche devis (page interne uniquement)

@@ -27,7 +27,7 @@ const setupEF = () => setupV7("la facture électronique");
 async function efData(fid) {
   const f = byId(db.factures, fid);
   if (!f) throw new Error("Facture introuvable.");
-  const lignes = await lignesOf("facture", fid);
+  const lignes = (await lignesOf("facture", fid)).filter((l) => l.nature !== "saut");
   const c = { ...(clientOf(f.client_id) || {}), ...(db.cx[f.client_id] || {}) };
   const ch = f.chantier_id ? byId(db.chantiers, f.chantier_id) : null;
   const meta = (typeof fdOf === "function" && fdOf(fid)) || {};

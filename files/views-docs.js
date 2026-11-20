@@ -85,8 +85,9 @@ V.devis = (r) => docList("devis", r);
 V.factures = (r) => docList("facture", r);
 
 /* ---------- Fiche d'un document ---------- */
-function docPreview(K, d, lignes) {
+function docPreview(K, d, lignes, ex = {}) {
   const e = db.ent, c = clientOf(d.client_id) || {}, k = KD[K];
+  lignes = lignes.filter((l) => l.nature !== "saut");
   if (typeof cxPreviewLignes === "function") lignes = cxPreviewLignes(lignes);
   const by = totauxParTaux(lignes, d);
   const rates = Object.keys(by).sort((a, b) => b - a);
@@ -112,6 +113,7 @@ function docPreview(K, d, lignes) {
       <div style="text-align:right"><b>${K === "facture" ? esc(fxLabel(d)) : k.label} ${esc(docNum(d, K))}</b><small>Date : ${D(d[k.df])}</small><small>${K === "devis" ? `Valable ${d.validite_jours} jours` : `Échéance : ${D(d.echeance)}`}</small></div></div>
     <div class="doc-h"><div><small>${K === "devis" ? "Destinataire" : "Facturé à"}</small><b>${esc(c.nom || d.client_nom)}</b><small>${esc(c.adresse || "")}</small><small>${esc(c.ville || "")}</small></div>
       ${d.chantier_nom ? `<div style="text-align:right"><small>Chantier</small><b>${esc(d.chantier_nom)}</b></div>` : ""}</div>
+    ${[ex.debut_travaux ? `Début des travaux : ${D(ex.debut_travaux)}` : "", ex.duree_estimee ? `Durée estimée : ${esc(ex.duree_estimee)}` : "", ex.fin_chantier ? `Fin de chantier au plus tard : ${D(ex.fin_chantier)}` : ""].filter(Boolean).length ? `<p class="mut" style="margin:0 0 8px">${[ex.debut_travaux ? `Début des travaux : ${D(ex.debut_travaux)}` : "", ex.duree_estimee ? `Durée estimée : ${esc(ex.duree_estimee)}` : "", ex.fin_chantier ? `Fin de chantier au plus tard : ${D(ex.fin_chantier)}` : ""].filter(Boolean).join(" · ")}</p>` : ""}${ex.description ? `<p style="margin:0 0 12px;white-space:pre-line">${esc(ex.description)}</p>` : ""}
     ${recap}${avancement}
     <div class="tw"><table class="dt"><thead><tr><th class="n">N°</th><th>Désignation</th><th class="r">Quantité</th><th class="r">P.U. HT</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="totaux">${fxTot}<div><span>${ded.length ? "Reste à facturer HT" : "Total HT"}</span><span class="num">${E2(d.montant_ht)}</span></div>
@@ -127,6 +129,7 @@ async function docDetail(K, id) {
   const d = byId(db[k.list], id);
   if (!d) return `<div class="empty"><h2>${k.label} introuvable</h2><button class="btn" data-go="${k.route}">Retour à la liste</button></div>`;
   const lignes = await lignesOf(K, id);
+  const ex = await docExtra(K, id);
   const p = partageOf(id);
   const st = docStatut(d, K);
   const fac = K === "devis" ? devisFacture(id) : null;
@@ -174,23 +177,32 @@ async function docDetail(K, id) {
     : "";
   const echHtml = K === "facture" && d.statut !== "Annulée" && !fxIsAvoir(d) ? echCard(d) : "";
   return page(`${esc(docNum(d, K))} ${chip(st)}`, `${K === "facture" && fxNat(d) !== "Facture" ? esc(fxLabel(d)) + " · " : ""}${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
-    `<div class="g2"><div>${docPreview(K, d, lignes)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) + fxDevisCard(d) + (typeof mkDevisCards === "function" ? mkDevisCards(d, lignes) : "") : fxDetailCard(d) + fxLinkedCard(d)}${echHtml}${payHtml}${K === "facture" ? rgInvoiceCard(d) : ""}</div></div>`,
+    `<div class="g2"><div>${docPreview(K, d, lignes, ex)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) + fxDevisCard(d) + (typeof mkDevisCards === "function" ? mkDevisCards(d, lignes) : "") : fxDetailCard(d) + fxLinkedCard(d)}${echHtml}${payHtml}${K === "facture" ? rgInvoiceCard(d) : ""}</div></div>`,
     crumbs([K === "devis" ? "Devis" : "Factures", k.route], [docNum(d, K)]));
 }
 
 /* ---------- Éditeur (devis / facture) : catégories > lignes (+ description) ---------- */
+const LCOLS = `<colgroup><col class="c-ln"><col class="c-des"><col class="c-q"><col class="c-u"><col class="c-p"><col class="c-t"><col class="c-tot"><col class="c-a"></colgroup>`;
 function ligneRow(l = {}) {
   if (cxCurK === "devis" && l.type_ligne === "image") return cxImageRow(l);
   const tva = l.taux_tva ?? (Number(db.ent.taux_tva_defaut) || 20);
   const nat = l.nature || "normale";
-  return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}" data-tp="${l._tp ?? ""}" data-mref="${esc(l.marche_ref || "")}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Poste libre : libellé (ex : frais de déplacement, remise commerciale)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea>${cxCurK === "devis" ? cxPanel(l) : ""}</td>
-    <td style="width:64px"><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}"></td>
-    <td style="width:86px"><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}"></td>
-    <td style="width:92px"><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00"></td>
-    <td style="width:80px"><select data-f="tva">${[...new Set([...TVA_TAUX, Number(tva)])].map((t) => `<option value="${t}"${Number(t) === Number(tva) ? " selected" : ""}>${String(t).replace(".", ",")} %</option>`).join("")}</select></td>
-    <td class="lt" style="width:92px"><span data-f="tot">0,00</span></td>
-    <td class="lact"><span class="lmore"><button type="button" class="rm" data-up title="Monter" aria-label="Monter la ligne">${svg(ic.up)}</button><button type="button" class="rm" data-down title="Descendre" aria-label="Descendre la ligne">${svg(ic.down)}</button><button type="button" class="rm" data-dup title="Dupliquer la ligne" aria-label="Dupliquer la ligne">${svg(ic.dup)}</button></span><button type="button" class="rm" data-rm title="Supprimer la ligne" aria-label="Supprimer la ligne">${svg(ic.x)}</button></td></tr>`;
+  const dg = `<span class="dg-h" data-drag title="Glisser pour déplacer" aria-label="Déplacer la ligne">⋮⋮</span>`;
+  const act = (dup) => `<td class="lact"><span class="lmore"><button type="button" class="rm" data-up title="Monter" aria-label="Monter la ligne">${svg(ic.up)}</button><button type="button" class="rm" data-down title="Descendre" aria-label="Descendre la ligne">${svg(ic.down)}</button>${dup ? `<button type="button" class="rm" data-dup title="Dupliquer la ligne" aria-label="Dupliquer la ligne">${svg(ic.dup)}</button>` : ""}</span><button type="button" class="rm" data-rm title="Supprimer la ligne" aria-label="Supprimer la ligne">${svg(ic.x)}</button></td>`;
+  if (nat === "saut") {
+    return `<tr class="lr lr-pb" data-tp="" data-mref="" data-nat="saut" data-ref=""><td class="ln">${dg}</td><td colspan="6"><span class="pb-line">Saut de page : la suite commence sur une nouvelle page du PDF</span>
+      <input type="hidden" data-f="des" value="Saut de page"><input type="hidden" data-f="desc" value=""><input type="hidden" data-f="qte" value="1"><input type="hidden" data-f="uni" value=""><input type="hidden" data-f="pu" value="0"><input type="hidden" data-f="tva" value="${tva}"><span data-f="tot" hidden></span></td>${act(false)}</tr>`;
+  }
+  const txt = nat === "libre" && !(Number(l.prix_unitaire_ht) > 0);
+  return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}${txt ? " lr-txt" : ""}" data-tp="${l._tp ?? ""}" data-mref="${esc(l.marche_ref || "")}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td class="ln">${dg}<span class="ln-n" data-f="num"></span></td>
+    <td class="ld"><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Texte libre, ou poste libre (frais de déplacement, remise commerciale…)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea>${cxCurK === "devis" ? cxPanel(l) : ""}</td>
+    <td><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}" aria-label="Quantité"></td>
+    <td><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}" aria-label="Unité"></td>
+    <td><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00" aria-label="Prix unitaire HT"></td>
+    <td><select data-f="tva" aria-label="TVA">${[...new Set([...TVA_TAUX, Number(tva)])].map((t) => `<option value="${t}"${Number(t) === Number(tva) ? " selected" : ""}>${String(t).replace(".", ",")} %</option>`).join("")}</select></td>
+    <td class="lt"><span data-f="tot">0,00</span></td>${act(true)}</tr>`;
 }
+
 // Regroupe les lignes consécutives qui ont la même catégorie
 function groupCats(ls, composite = false) {
   const out = [];
@@ -201,9 +213,9 @@ function groupCats(ls, composite = false) {
   }
   return out;
 }
-const catBlock = (g) => `<section class="cat"><div class="cat-h"><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Titre de la section (ex : Démolition, Plomberie…)" aria-label="Titre de la section"><span class="num cat-sub" data-f="sub"></span><button type="button" class="rm" data-rmcat title="Supprimer la catégorie" aria-label="Supprimer la catégorie">${svg(ic.x)}</button></div>${cxCurK === "devis" && typeof mkCatFields === "function" && db.v14 ? `<details class="cat-more"${g.lot || g.sous_lot || g.tranche || g.tranche_cond ? " open" : ""}><summary>Marché public : lot, sous-lot, tranche</summary>${mkCatFields(g)}</details>` : ""}
-  <div class="tw"><table class="lines"><thead><tr><th>Désignation</th><th>Qté</th><th>Unité</th><th>P.U. HT</th><th>TVA</th><th class="r">Total HT</th><th></th></tr></thead><tbody class="lb">${g.lignes.map(ligneRow).join("")}</tbody></table></div>
-  <button type="button" class="btn o sm" data-addl>+ Ajouter une ligne</button></section>`;
+const catBlock = (g) => `<section class="cat"><div class="cat-h"><span class="dg-h cat-dg" data-dragcat title="Glisser pour déplacer la section" aria-label="Déplacer la section">⋮⋮</span><span class="cat-n" data-f="catn"></span><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Titre de la section (facultatif) : Démolition, Plomberie…" aria-label="Titre de la section"><span class="num cat-sub" data-f="sub"></span><span class="cat-act"><button type="button" class="rm" data-upcat title="Monter la section" aria-label="Monter la section">${svg(ic.up)}</button><button type="button" class="rm" data-downcat title="Descendre la section" aria-label="Descendre la section">${svg(ic.down)}</button><button type="button" class="rm" data-rmcat title="Supprimer la section et ses lignes" aria-label="Supprimer la section">${svg(ic.x)}</button></span></div>${cxCurK === "devis" && typeof mkCatFields === "function" && db.v14 ? `<details class="cat-more"${g.lot || g.sous_lot || g.tranche || g.tranche_cond ? " open" : ""}><summary>Marché public : lot, sous-lot, tranche</summary>${mkCatFields(g)}</details>` : ""}
+  <div class="tw"><table class="lines">${LCOLS}<tbody class="lb">${g.lignes.map(ligneRow).join("")}</tbody></table></div>
+  <button type="button" class="addl" data-addl>+ Ajouter une ligne</button></section>`;
 function readLignes(root) {
   const out = [];
   $$(".cat", root).forEach((sec) => {
@@ -244,91 +256,142 @@ function ovInsertLine(m, o) {
 }
 function recalcLignes(root) {
   const ls = readLignes(root);
-  let i = 0;
+  let i = 0, sn = 0;
+  const rows = $$(".lr", root);
   $$(".cat", root).forEach((sec) => {
-    let s = 0;
-    $$(".lr", sec).forEach((tr) => { const l = ls[i++], t = r2(l.quantite * l.prix_unitaire_ht); if (cxIncluded(l)) s += t; $('[data-f="tot"]', tr).textContent = fmtNum(t); });
-    $('[data-f="sub"]', sec).textContent = "Sous-total " + E2(s);
+    let s = 0, n = 0;
+    const titled = !!$('[data-f="cat"]', sec).value.trim();
+    if (titled) sn++;
+    const cn = $('[data-f="catn"]', sec); if (cn) cn.textContent = titled ? sn + "." : "";
+    $$(".lr", sec).forEach((tr) => {
+      const l = ls[i++], t = r2(l.quantite * l.prix_unitaire_ht);
+      if (cxIncluded(l)) s += t;
+      const isTxt = tr.dataset.nat === "libre" && !(l.prix_unitaire_ht > 0); tr.classList.toggle("lr-txt", isTxt);
+      const real = tr.dataset.nat !== "saut" && tr.dataset.type !== "image" && !isTxt;
+      if (real) n++;
+      const num = $('[data-f="num"]', tr); if (num) num.textContent = real ? (titled ? `${sn}.${n}` : String(n)) : "";
+      const tt = $('[data-f="tot"]', tr); if (tt) tt.textContent = isTxt || tr.dataset.nat === "saut" ? "" : fmtNum(t);
+    });
+    $('[data-f="sub"]', sec).textContent = $$(".lr", sec).length ? "Sous-total " + E2(s) : "";
   });
-  const by = totauxParTaux(ls.filter((l) => (l.designation || l.prix_unitaire_ht) && cxIncluded(l)));
-  const tp = sum($$(".lr", root), (tr) => (Number(tr.dataset.tp) || 0) * parseNum($('[data-f="qte"]', tr).value));
+  const by = totauxParTaux(ls.filter((l) => (l.designation || l.prix_unitaire_ht) && l.nature !== "saut" && cxIncluded(l)));
+  const tp = sum(rows, (tr) => (Number(tr.dataset.tp) || 0) * parseNum($('[data-f="qte"]', tr).value));
   const ht = sum(Object.values(by), (x) => x.ht), tva = sum(Object.values(by), (x) => x.tva);
-  $("#totbox", root).innerHTML = `<div><span>Total HT</span><span class="num">${E2(ht)}</span></div>${Object.keys(by).sort((a, b) => b - a).map((t) => `<div><span>TVA ${String(t).replace(".", ",")} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}<div class="ttc"><span>Total TTC</span><span class="num">${E2(ht + tva)}</span></div>${tp > 0 ? `<div title="Information interne, non imprimée sur le document"><span>Temps de pose estimé</span><span class="num">${fmtNum(tp, 1)} h</span></div>` : ""}`;
+  const tb = $("#totbox", root);
+  if (tb) tb.innerHTML = `<div class="tb-r"><span>Total net HT</span><span class="num">${E2(ht)}</span></div>${Object.keys(by).sort((a, b) => b - a).map((t) => `<div class="tb-r"><span>TVA ${String(t).replace(".", ",")} %</span><span class="num">${E2(by[t].tva)}</span></div>`).join("")}${Object.keys(by).length ? "" : `<div class="tb-r"><span>TVA</span><span class="num">${E2(0)}</span></div>`}<div class="ttc"><span>Total TTC</span><span class="num">${E2(ht + tva)}</span></div>${tp > 0 ? `<div class="tb-r" title="Information interne, non imprimée sur le document"><span>Temps de pose estimé</span><span class="num">${fmtNum(tp, 1)} h</span></div>` : ""}`;
+  const real = ls.filter((l) => (l.designation || l.prix_unitaire_ht) && l.type_ligne !== "image" && l.nature !== "saut" && !(l.nature === "libre" && !(l.prix_unitaire_ht > 0)));
   const st = $("#edstat", root);
-  if (st) { const n = ls.filter((l) => (l.designation || l.prix_unitaire_ht) && l.type_ligne !== "image").length; st.innerHTML = n ? `<b>${n} prestation${n > 1 ? "s" : ""}</b> · HT ${E2(ht)} · <strong>TTC ${E2(ht + tva)}</strong>` : "Ajoutez au moins une prestation pour continuer."; }
+  if (st) { const n = real.length; st.innerHTML = n ? `<b>${n} prestation${n > 1 ? "s" : ""}</b> · HT ${E2(ht)} · <strong>TTC ${E2(ht + tva)}</strong>` : "Ajoutez au moins une prestation pour continuer."; }
+  const em = $("#shempty", root); if (em) em.hidden = rows.length > 0;
   if (cxCurK === "devis") cxAfterRecalc(root, ls);
+  root.dispatchEvent(new CustomEvent("sheet-changed"));
 }
 // Les colonnes categorie / description sont écrites après l'enregistrement (par position)
 async function saveCats(K, id, ls) {
   const k = KD[K];
   const rows = await q(sb.from(k.lt).select("id").eq(k.fk, id).order("position"));
-  const ext = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : K === "devis" && db.v13 ? { ...cxExt(l), ...(db.v14 && typeof mkExt === "function" ? mkExt(l) : {}) } : {});
+  const ext = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : K === "devis" && db.v13 ? { ...cxExt(l), ...(db.v14 && typeof mkExt === "function" ? mkExt(l) : {}), ...(db.v24 ? { nature: l.nature || "normale" } : {}) } : K === "devis" && db.v24 ? { nature: l.nature || "normale" } : {});
   await Promise.all(rows.map((r, i) => (ls[i] ? q(sb.from(k.lt).update({ categorie: ls[i].categorie || null, description: ls[i].description || null, ...ext(ls[i]) }).eq("id", r.id)) : null)));
 }
 async function copyCats(did, fid) {
   try {
-    let a = await q(sb.from("devis_lignes").select(db.v13 ? "categorie,description,type_ligne,est_option,option_choisie" : "categorie,description").eq("devis_id", did).order("position"));
+    await docV24();
+    let a = await q(sb.from("devis_lignes").select((db.v13 ? "categorie,description,type_ligne,est_option,option_choisie" : "categorie,description") + (db.v24 ? ",nature" : "")).eq("devis_id", did).order("position"));
     if (db.v13) a = a.filter((x) => x.type_ligne !== "image" && (!x.est_option || x.option_choisie));
     const b = await q(sb.from("factures_lignes").select("id").eq("facture_id", fid).order("position"));
-    await Promise.all(b.map((r, i) => (a[i] ? q(sb.from("factures_lignes").update({ categorie: a[i].categorie, description: a[i].description }).eq("id", r.id)) : null)));
+    await Promise.all(b.map((r, i) => (a[i] ? q(sb.from("factures_lignes").update({ categorie: a[i].categorie, description: a[i].description, ...(db.v24 && a[i].nature && a[i].nature !== "normale" ? { nature: a[i].nature } : {}) }).eq("id", r.id)) : null)));
   } catch (e) { console.warn("Catégories non copiées", e); }
 }
 
+// Migration v24 : description, dates de travaux, lignes « texte » et « saut de page »
+async function docV24() {
+  if (db.v24 !== undefined) return db.v24;
+  try {
+    const a = await sb.from("devis").select("description,debut_travaux,duree_estimee,fin_chantier").limit(1);
+    const b = await sb.from("devis_lignes").select("nature").limit(1);
+    db.v24 = !a.error && !b.error;
+  } catch (e) { db.v24 = false; }
+  return db.v24;
+}
+async function docExtra(K, id) {
+  if (!id || !(await docV24())) return {};
+  try { const r = await sb.from(KD[K].list).select("description,debut_travaux,duree_estimee,fin_chantier").eq("id", id).maybeSingle(); return r.data || {}; } catch (e) { return {}; }
+}
+const docRealLine = (l) => l.type_ligne !== "image" && l.nature !== "saut" && !(l.nature === "libre" && !(Number(l.prix_unitaire_ht) > 0));
+
 async function docForm(K, d, opts = {}) {
   if (!guard()) return;
-  const k = KD[K];
+  const k = KD[K], v24 = await docV24();
   cxCurK = K === "devis" && db.v13 ? "devis" : "";
   const lignes = d ? await lignesOf(K, d.id) : opts.lignes || [];
+  const ex = d ? await docExtra(K, d.id) : {};
   let preClient = opts.client || d?.client_id || "";
   if (opts.chantier) preClient = byId(db.chantiers, opts.chantier)?.client_id || preClient;
   const chOpts = (cid) => [{ v: "", l: "Sans chantier" }, ...db.chantiers.filter((c) => !cid || c.client_id === cid).map((c) => ({ v: c.id, l: c.nom }))];
   const isD = K === "devis", noAvoir = K === "facture" && db.v8 && fxNat(d || {}) !== "Avoir";
-  const edc = (t, inner, cls = "") => `<section class="edc ${cls}"><h3>${t}</h3>${inner}</section>`;
-  const body = `<datalist id="unites">${UNITES.map((u) => `<option value="${u}">`).join("")}</datalist><div class="ed">
-    <div class="ed-top">
-      ${edc("Client", `<div class="frm1">${clientBlock(preClient)}
-        ${fld({ k: "chantier_id", l: "Chantier (facultatif)", t: "select", o: chOpts(preClient || db.clients[0]?.id), v: opts.chantier || d?.chantier_id || "", r: 0 })}</div>`)}
-      ${edc(isD ? "Dates" : "Dates et paiement", `<div class="frm1">
-        ${fld({ k: "date", l: isD ? "Date du devis" : "Date de la facture", t: "date", v: d?.[k.df] || today() })}
-        ${isD ? `<div>${fld({ k: "validite_jours", l: "Valable pendant (jours)", t: "number", v: d?.validite_jours || 30 })}<div class="chips" data-chips="validite_jours">${[15, 30, 60, 90].map((n) => `<button type="button" class="chip-b" data-set="validite_jours" data-val="${n}">${n} j</button>`).join("")}</div></div>`
-          : `<div>${fld({ k: "echeance", l: "À payer avant le", t: "date", v: d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30) })}<div class="chips" data-chips="echeance">${[[0, "À réception"], [30, "30 j"], [45, "45 j"], [60, "60 j"]].map(([n, l]) => `<button type="button" class="chip-b" data-days="${n}">${l}</button>`).join("")}</div></div>`}</div>`)}
-    </div>
-    ${edc("Prestations", `
+  const canTxt = v24 || (K === "facture" && !!db.v8), canPb = v24;
+  const num = d ? docNum(d, K) : "";
+  const title = isD ? "Devis" : d && typeof fxLabel === "function" ? esc(fxLabel(d)) : "Facture";
+  const inl = (name, type, val, extra = "") => `<input class="inl" type="${type}" id="f_${name}" name="${name}" value="${esc(val ?? "")}" ${extra}>`;
+  const body = `<datalist id="unites">${UNITES.map((u) => `<option value="${u}">`).join("")}</datalist>
+  <div class="sheet-wrap" id="shw"><div class="sheet-main">
+    <div class="sheet-bar"><span>Modifiez le document directement : chaque élément est éditable, les totaux se mettent à jour en direct.</span><button type="button" class="btn o sm" id="shprev" aria-pressed="false">Aperçu PDF en direct</button></div>
+    <div class="sheet">
+      <div class="sh-head">
+        <div class="sh-meta">
+          <h2 class="sh-title">${title} ${num && num !== "Brouillon" && num !== "-" ? "n° " + esc(num) : `<span class="sh-new">${d ? "(brouillon)" : "(nouveau)"}</span>`}</h2>
+          <div class="sh-l">En date du ${inl("date", "date", d?.[k.df] || today(), "required")}</div>
+          ${isD ? `<div class="sh-l">Valable ${inl("validite_jours", "number", d?.validite_jours || 30, 'min="1" required')} jours, soit jusqu'au <b id="shuntil"></b></div>
+            <div class="chips sh-chips" data-chips="validite_jours">${[15, 30, 60, 90].map((n) => `<button type="button" class="chip-b" data-set="validite_jours" data-val="${n}">${n} j</button>`).join("")}</div>`
+            : `<div class="sh-l">À payer avant le ${inl("echeance", "date", d?.echeance || addDays(today(), Number(db.ent.delai_paiement_jours) || 30), "required")}</div>
+            <div class="chips sh-chips" data-chips="echeance">${[[0, "À réception"], [30, "30 j"], [45, "45 j"], [60, "60 j"]].map(([n, l]) => `<button type="button" class="chip-b" data-days="${n}">${l}</button>`).join("")}</div>`}
+          ${v24 ? `<div class="sh-l">Début des travaux le ${inl("debut_travaux", "date", ex.debut_travaux || "")}</div>
+          <div class="sh-l">Durée estimée à ${inl("duree_estimee", "text", ex.duree_estimee || "", 'placeholder="définir (ex : 3 semaines)"')}</div>
+          <div class="sh-l">Date limite de fin de chantier le ${inl("fin_chantier", "date", ex.fin_chantier || "")}</div>` : ""}
+        </div>
+        <div class="sh-who">${clientBlock(preClient)}
+          ${fld({ k: "chantier_id", l: "Chantier (facultatif)", t: "select", o: chOpts(preClient || db.clients[0]?.id), v: opts.chantier || d?.chantier_id || "", r: 0 })}</div>
+      </div>
+      ${v24 ? `<div class="sh-desc"><button type="button" class="lk-add" id="shdescb"${ex.description ? " hidden" : ""}>⊕ Ajouter une description</button><textarea class="inl-ta" id="f_description" name="description" rows="2" placeholder="Description du projet ou des travaux (affichée avant le détail)"${ex.description ? "" : " hidden"}>${esc(ex.description || "")}</textarea></div>` : ""}
       <div class="qadd"><div class="qin">${svg(ic.search)}<input id="qaq" type="text" autocomplete="off" placeholder="${isD ? "Que faut-il chiffrer" : "Que faut-il facturer"} ? Tapez « carrelage », « cloison »… puis Entrée" aria-label="Ajouter une prestation"><button type="button" class="btn sm" id="qaok">Ajouter</button></div><div id="qasug" class="qsug" hidden></div></div>
-      <div id="cats">${groupCats(lignes).map(catBlock).join("")}</div>
-      <div class="edtools"><button type="button" class="btn o sm" id="addc">+ Section</button><button type="button" class="btn o sm" id="addov">Bibliothèque</button>${K === "facture" ? `<button type="button" class="btn o sm" id="addlibre">+ Poste libre</button>` : ""}${cxCurK === "devis" ? cxToolbar(K) : ""}</div>`, "ed-lines")}
-    <div class="ed-bot">
-      ${edc("Remarques", `${fld({ k: "notes", l: "Texte affiché sur le document", t: "textarea", v: d?.notes || opts.notes || "", r: 0, cls: "full" })}
-        <div class="chips"><span class="edt-l">Ajouter :</span>${(isD ? ["Acompte de 30 % à la signature du devis.", "Solde à la réception des travaux.", "Délai de démarrage à convenir avec le client."] : ["Règlement par virement bancaire.", "Solde à la réception des travaux.", "Aucun escompte pour paiement anticipé."]).map((t) => `<button type="button" class="chip-b" data-note="${esc(t)}">${esc(t.replace(/\.$/, ""))}</button>`).join("")}</div>
-        ${noAvoir ? `<details class="edadv"><summary>Retenue de garantie, acomptes, autoliquidation… (facultatif)</summary><div class="frm">${fxAdjFields(d ? fdOf(d.id) : {})}</div></details>` : ""}`)}
-      ${edc("Total", `<div class="totbox" id="totbox"></div>`, "ed-tot")}
-    </div>
+      <div class="sh-th"><table class="lines lines-h">${LCOLS}<thead><tr><th>N°</th><th>Désignation</th><th class="r">Qté</th><th>Unité</th><th class="r">Prix U. HT</th><th>TVA</th><th class="r">Total HT</th><th></th></tr></thead></table></div>
+      <div id="cats">${lignes.length ? groupCats(lignes).map(catBlock).join("") : ""}</div>
+      <p class="sh-empty" id="shempty"${lignes.length ? " hidden" : ""}>Cliquez sur un des boutons ci-dessous pour ajouter un élément à votre document :</p>
+      <div class="sh-add">
+        <div class="sh-add-l"><button type="button" class="btn o sm" id="addfour">+ Fourniture</button><button type="button" class="btn o sm" id="addmo">+ Main d'œuvre</button><button type="button" class="btn o sm" id="addov">+ Ouvrage</button>
+          <details class="more sh-more"><summary class="btn o sm" aria-label="Plus d'éléments" title="Plus d'éléments">…</summary><div class="mm">${canTxt ? `<button type="button" class="mi" id="addlibre">Poste libre (remise, frais, déplacement…)</button>` : ""}${cxCurK === "devis" ? cxToolbar(K) : ""}</div></details></div>
+        <div class="sh-add-r"><button type="button" class="btn o sm" id="addc">Section</button>${canTxt ? `<button type="button" class="btn o sm" id="addtxt">Texte</button>` : ""}${canPb ? `<button type="button" class="btn o sm" id="addpb">Saut de page</button>` : ""}</div>
+      </div>
+      ${!v24 ? `<p class="sh-note">Pour ajouter des textes libres, des sauts de page, une description et les dates de travaux : exécutez migration_v24.sql dans Supabase.</p>` : ""}
+      <div class="sh-foot">
+        <div class="sh-foot-l">
+          <h3>Conditions de paiement</h3>
+          <div class="chips"><span class="edt-l">Ajouter une condition :</span>${(isD ? ["Acompte de 30 % à la signature du devis.", "Solde à la réception des travaux.", "Délai de démarrage à convenir avec le client."] : ["Règlement par virement bancaire.", "Solde à la réception des travaux.", "Aucun escompte pour paiement anticipé."]).map((t) => `<button type="button" class="chip-b" data-note="${esc(t)}">${esc(t.replace(/\.$/, ""))}</button>`).join("")}</div>
+          <h3>Notes de bas de page</h3>
+          ${fld({ k: "notes", l: "Texte affiché en bas du document", t: "textarea", v: d?.notes || opts.notes || "", r: 0, cls: "full" })}
+        </div>
+        <div class="sh-foot-r">
+          ${noAvoir ? `<details class="edadv sh-adj"><summary>Définir un ajustement (retenue de garantie, acomptes, autoliquidation…)</summary><div class="frm">${fxAdjFields(d ? fdOf(d.id) : {})}</div></details>` : ""}
+          <div class="totbox" id="totbox"></div>
+        </div>
+      </div>
+    </div></div>
+    <aside class="sheet-prev" id="shpv" hidden><div class="sp-h"><b>Aperçu du PDF</b><span id="shpvst" class="mut"></span></div><iframe id="shpvf" title="Aperçu du PDF"></iframe></aside>
   </div>`;
   modal(d ? `Modifier ${esc(docNum(d, K))}` : K === "devis" ? "Nouveau devis" : "Nouvelle facture", body, {
     xl: true, wide: true, submit: d ? "Enregistrer" : "Créer le brouillon", extra: `<span id="edstat" class="edstat"></span>`,
     onMount: (m) => {
+      m.classList.add("sheetmd");
       bindClientBlock(m, (cid) => { const s = $("#f_chantier_id", m); s.innerHTML = chOpts(cid === "__new" ? "none" : cid).map((o) => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join(""); });
       m.addEventListener("input", (e) => { if (e.target.closest(".cat")) recalcLignes(m); });
-      m.addEventListener("click", (e) => {
-        const t = e.target;
-        if (t.closest("#addov")) return ovPicker((o) => ovInsertLine(m, o));
-        if (t.closest("#addlibre")) { const lb = $$(".lb", m).pop(); lb.insertAdjacentHTML("beforeend", ligneRow({ nature: "libre", unite: "", prix_unitaire_ht: "" })); $$('[data-f="des"]', lb).pop().focus(); return recalcLignes(m); }
-        if (t.closest("#addc")) { $("#cats", m).insertAdjacentHTML("beforeend", catBlock({ cat: "", lignes: [{}] })); $$('[data-f="cat"]', m).pop().focus(); }
-        const al = t.closest("[data-addl]");
-        if (al) { const lb = $(".lb", al.closest(".cat")); lb.insertAdjacentHTML("beforeend", ligneRow({ taux_tva: Number($('[data-f="tva"]', lb.lastElementChild)?.value) || undefined })); $$('[data-f="des"]', lb).pop().focus(); }
-        const rc = t.closest("[data-rmcat]");
-        if (rc) { const sec = rc.closest(".cat"); if ($$(".cat", m).length > 1) sec.remove(); else { $$("input,textarea", sec).forEach((i) => (i.value = "")); $$(".lr", sec).slice(1).forEach((r) => r.remove()); } }
-        const rm = t.closest("[data-rm]");
-        if (rm) { const lb = rm.closest(".lb"); if ($$(".lr", lb).length > 1) rm.closest("tr").remove(); else $$("input,textarea", rm.closest("tr")).forEach((i) => (i.value = "")); }
-        recalcLignes(m);
-      });
       recalcLignes(m);
       if (typeof edEnhance === "function") edEnhance(m, K);
+      if (typeof edSheet === "function") edSheet(m, K, d, { v24, canTxt, canPb });
       if (cxCurK === "devis") { cxEditorMount(m, K); if (opts.dictee) setTimeout(() => cxDictee(m), 80); }
     },
     onSubmit: async (v, api) => {
       const ls = readLignes(api.el).filter((l) => l.designation || l.prix_unitaire_ht || l.type_ligne === "image");
-      if (!ls.some((l) => l.type_ligne !== "image")) throw new Error("Ajoutez au moins une ligne avec une désignation et un prix.");
+      if (!ls.some(docRealLine)) throw new Error("Ajoutez au moins une ligne avec une désignation et un prix.");
       const cid = await resolveClient(v);
       const adj = K === "facture" && db.v8 && $("#f_aj_ret", api.el) ? fxReadAdj(v) : null;
       if (adj?.autoliquidation) ls.forEach((l) => (l.taux_tva = 0));
@@ -338,6 +401,7 @@ async function docForm(K, d, opts = {}) {
       if (K === "devis" && opts.parent && db.v14) { try { await q(sb.from("devis").update({ parent_id: opts.parent }).eq("id", id)); } catch (e) { console.warn(e); } }
       if (adj) await fxSaveDetails(id, adj);
       try { await saveCats(K, id, ls); } catch (e) { console.warn(e); toast("Document enregistré, mais les catégories et descriptions n'ont pas pu l'être : exécutez migration_v4.sql dans Supabase.", "dn"); }
+      if (v24) { try { await q(sb.from(k.list).update({ description: (v.description || "").trim() || null, debut_travaux: v.debut_travaux || null, duree_estimee: (v.duree_estimee || "").trim() || null, fin_chantier: v.fin_chantier || null }).eq("id", id)); } catch (e) { console.warn(e); toast("Document enregistré, mais la description et les dates de travaux n'ont pas pu l'être.", "dn"); } }
       api.close();
       toast(d ? "Modifications enregistrées." : `${k.label} créé en brouillon.`, "ok");
       await refresh();
@@ -370,13 +434,14 @@ async function pdfContext(K) {
 async function docPdfBytes(K, id) {
   const k = KD[K], d = byId(db[k.list], id);
   const lignes = await lignesOf(K, id);
+  const ex = await docExtra(K, id);
   const c = clientOf(d.client_id) || {}, ch = d.chantier_id ? byId(db.chantiers, d.chantier_id) : null;
   const dv = K === "facture" && (fdOf(id)?.devis_id || d.devis_id) ? byId(db.devis, fdOf(id)?.devis_id || d.devis_id) : null;
   const data = {
     kind: K, numero: d.numero || (K === "facture" ? "(brouillon)" : ""), date: d[k.df], echeance: d.echeance, validite_jours: d.validite_jours,
     statut: d.statut, notes: d.notes, client: { nom: c.nom || d.client_nom, adresse: c.adresse, ville: c.ville, email: c.email, telephone: c.telephone },
     chantier: ch ? { nom: ch.nom, ville: ch.ville } : null, lignes, ht: d.montant_ht, tva: d.montant_tva, ttc: d.montant_ttc, taux_tva: d.taux_tva,
-    paye: d.paye || 0, devis_numero: dv?.numero,
+    paye: d.paye || 0, devis_numero: dv?.numero, intro: ex.description || "", travaux: { debut: ex.debut_travaux, duree: ex.duree_estimee, fin: ex.fin_chantier },
     qr: K === "facture" && d.statut !== "Brouillon" && typeof rgEpcMatrix === "function" ? rgEpcMatrix(d) : null,
     fx: K === "facture" && typeof fxPdfData === "function" ? fxPdfData(d) : null,
     empreinte: K === "facture" && d.statut !== "Brouillon" && typeof cfEmpreinte === "function" ? await cfEmpreinte(d, lignes) : "",

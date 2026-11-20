@@ -196,6 +196,16 @@ const PilotPdf = (() => {
     });
     y = Math.min(cy, ky + 8) - 16;
 
+    // ---- Dates de travaux et description d'introduction ----
+    const tv = data.travaux || {};
+    const tvl = [tv.debut ? `Début des travaux : ${D(tv.debut)}` : "", tv.duree ? `Durée estimée : ${tv.duree}` : "", tv.fin ? `Fin de chantier au plus tard : ${D(tv.fin)}` : ""].filter(Boolean);
+    if (tvl.length) { need(26); txt(tvl.join("     "), ML, y - 4, { size: 9, f: bold, color: GREY }); y -= 20; }
+    if (data.intro && String(data.intro).trim()) {
+      const il = String(data.intro).split("\n").flatMap((p) => wrap(p, font, 9.5, W - 2 * ML));
+      for (const ll of il) { need(16); txt(ll, ML, y - 4, { size: 9.5 }); y -= 13; }
+      y -= 8;
+    }
+
     // ---- Tableau ----
     const X = { n: ML, qte: 392, pu: 452, tva: 494, tot: W - ML };
     const designX = ML + 26, designW = 262;
@@ -270,6 +280,11 @@ const PilotPdf = (() => {
     groups.forEach((g, gi) => {
       if (g.cat) { if (y - 90 < botM) { newPage(); header(); } band(g, gi, false); }
       g.items.forEach((l, li) => {
+        if (l.nature === "saut") {
+          const restant = groups.slice(gi).some((gg, i) => gg.items.some((x, j) => (i > 0 || j > li) && x.nature !== "saut"));
+          if (restant) { newPage(); header(); if (g.cat) band(g, gi, true); }
+          return;
+        }
         if (l.type_ligne === "image") {
           const im = emb[l.image_path], cap = l.designation && l.designation !== "Image" ? String(l.designation) : "";
           const sc = Math.min(300 / im.width, 190 / im.height, 1), dw = im.width * sc, dh = im.height * sc, rh = dh + (cap ? 15 : 0) + 14;
