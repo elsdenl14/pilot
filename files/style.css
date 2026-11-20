@@ -1135,11 +1135,62 @@ table.lines { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .cat.fold .tw, .cat.fold .addbar, .cat.fold .cat-more { display: none; }
 .cat.fold .cat-h { margin-bottom: 6px; }
 .addbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 2px 2px; font-size: 12px; color: var(--mut); }
-.addbar .chip-b, .sh-add-l .btn[data-addt] { border-left-width: 3px; }
-.t-fourniture { border-left-color: #2f7bd8 !important; } .t-main_oeuvre { border-left-color: #2a9d6a !important; } .t-sous_traitance { border-left-color: #8e5bd0 !important; }
-.t-materiel { border-left-color: #e08a1e !important; } .t-divers { border-left-color: #8a94a3 !important; }
+
+.t-x-fourniture { border-left-color: #2f7bd8 !important; } .t-x-mo { border-left-color: #2a9d6a !important; } .t-sous_traitance { border-left-color: #8e5bd0 !important; }
+.t-x-mat { border-left-color: #e08a1e !important; } .t-x-div { border-left-color: #8a94a3 !important; }
 .sh-add-t { width: 100%; font-size: 12px; color: var(--mut); }
 select.typ { display: block; width: auto; max-width: 150px; margin: 0 0 3px; padding: 1px 6px; font-size: 11px; font-weight: 600; border-radius: 10px; border: 1px solid var(--line); background: var(--sunk); color: var(--mut); }
 select.typ-fourniture { color: #2f7bd8; border-color: #2f7bd8; } select.typ-main_oeuvre { color: #2a9d6a; border-color: #2a9d6a; }
 select.typ-sous_traitance { color: #8e5bd0; border-color: #8e5bd0; } select.typ-materiel { color: #e08a1e; border-color: #e08a1e; }
 select.typ-ouvrage { color: var(--acc); border-color: var(--acc); }
+
+/* v25b : rendu « feuille » épuré : bandeau d'en-tête, sections en bandeaux, lignes aérées */
+.sheet { box-shadow: none; padding: 24px 26px 22px; }
+.sh-th table.lines-h th { padding: 13px 6px; font-size: 14px; font-weight: 500; }
+.sh-th table.lines-h th:first-child, .sh-th table.lines-h th:last-child { border-radius: 0; }
+.sheet .cat { margin: 0; }
+.sheet .cat-h { background: #cfe0f2; color: var(--tx); border-radius: 0; padding: 9px 10px; margin: 0; min-height: 46px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sheet .cat-h { background: #26405c; } }
+:root[data-theme="dark"] .sheet .cat-h { background: #26405c; }
+.sheet .cat-h input { font-size: 18px; font-weight: 400; color: var(--tx); }
+.sheet .cat-h input::placeholder { color: var(--mut); }
+.cat-n { font-size: 15px; font-weight: 500; min-width: 3em; }
+.cat-sub { font-size: 14px; font-weight: 400; color: var(--tx); }
+.cat-act { order: 90; }
+.cat-fold { order: 99; width: 28px; height: 28px; border: 2px solid var(--tx); border-radius: 50%; display: inline-grid; place-items: center; background: transparent; padding: 0; color: var(--tx); }
+.cat-fold svg { width: 14px; height: 14px; }
+.cat.fold .cat-fold svg { transform: rotate(-90deg); }
+.sheet table.lines td { border-bottom: 0; padding: 6px 3px; vertical-align: middle; }
+.sheet table.lines tr.lr + tr.lr td { border-top: 1px solid var(--line2); }
+.sheet table.lines td.ln, .sheet table.lines td.lt { padding-top: 6px; font-size: 14px; }
+.sheet table.lines td input:not([type="hidden"]), .sheet table.lines td select[data-f] { font-size: 14px; padding: 9px 6px; }
+.sheet table.lines td input[data-f="qte"], .sheet table.lines td input[data-f="pu"] { text-align: right; }
+.sheet table.lines td input::placeholder, .sheet table.lines td textarea::placeholder { color: var(--faint); }
+.sheet table.lines td.ld { position: relative; }
+.sheet table.lines td.ld input[data-f="des"] { padding-right: 112px; }
+.sheet table.lines td.ld select.typ { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); margin: 0; width: auto; padding: 2px 8px; border-radius: 10px; font-size: 11px; z-index: 1; }
+.sheet table.lines td.ld:has(textarea:not(:placeholder-shown)) select.typ, .sheet table.lines tr.dopen td.ld select.typ { top: 18px; transform: translateY(-50%); }
+.sheet tr.lr:not(:hover):not(:focus-within) select.typ.typ- { display: none; }
+.sheet .lact .rm:not([data-rm]) { opacity: .8; }
+.addbar { opacity: 0; transition: opacity .12s; padding: 8px 6px; border-top: 1px solid var(--line2); }
+.sheet .cat:hover .addbar, .sheet .cat.active .addbar, .addbar:focus-within { opacity: 1; }
+.sheet .cat.fold .addbar { display: none; }
+.sh-add { margin-top: 8px; }
+.sh-add .btn.o { color: var(--acc); border-color: var(--acc); background: transparent; font-size: 14px; padding: 8px 14px; }
+.sh-add-r .btn.o { color: var(--tx); border-color: var(--line); }
+.sh-add-t { font-size: 12px; margin-bottom: -2px; }
+.secnav { border-radius: 0; box-shadow: none; border-left: 0; border-right: 0; background: var(--panel); }
+.c-ln { width: 50px; } .c-q { width: 64px; } .c-u { width: 72px; } .c-p { width: 92px; } .c-t { width: 74px; } .c-tot { width: 92px; } .c-a { width: 36px; }
+.sheetmd.prev .c-ln { width: 44px; } .sheetmd.prev .c-q { width: 54px; } .sheetmd.prev .c-u { width: 58px; } .sheetmd.prev .c-p { width: 78px; } .sheetmd.prev .c-t { width: 66px; } .sheetmd.prev .c-tot { width: 80px; } .sheetmd.prev .c-a { width: 36px; }
+.sheet table.lines td.lact { position: relative; padding: 0; }
+.sheet .lines .lact .lmore { position: absolute; right: 36px; top: 50%; transform: translateY(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12); padding: 1px 2px; z-index: 3; }
+.sheet .lines tr.lr:hover .lact .lmore, .sheet .lines tr.lr:focus-within .lact .lmore { opacity: 1; }
+.sheetmd.prev .sheet table.lines td.lact .lmore { flex-wrap: nowrap; }
+.sheet table.lines td.ld select.typ { top: 25px; transform: translateY(-50%); }
+.sheet table.lines td.ld:has(textarea:not(:placeholder-shown)) select.typ, .sheet table.lines tr.dopen td.ld select.typ { top: 25px; transform: translateY(-50%); }
+.sheet table.lines td.ld input[data-f="des"] { padding-right: 8px; }
+.sheet table.lines td.ld:has(select.typ:not(.typ-)) input[data-f="des"], .sheet tr.lr:hover td.ld input[data-f="des"], .sheet tr.lr:focus-within td.ld input[data-f="des"] { padding-right: 112px; }
+.sheet details.cx:not([open]) { display: none; }
+.sheet tr.lr.dopen details.cx { display: block; }
+.sheet .cat-more { margin: 0; padding: 2px 10px; font-size: 12px; color: var(--mut); }
+.c-u { width: 84px; } .sheetmd.prev .c-u { width: 64px; }
