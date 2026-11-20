@@ -137,12 +137,25 @@ V.carte = (r) => {
   return { html, after: cmInit };
 };
 
+// Feuille de style Leaflet : on essaie vendor/leaflet/, la racine, puis le CDN, et on vérifie qu'elle s'applique vraiment
+// (un hébergeur qui renvoie la page d'accueil pour un fichier absent donnerait sinon une carte cassée : tuiles en vrac).
+async function cmCss() {
+  const ok = () => { const p = document.createElement("div"); p.className = "leaflet-pane"; p.style.cssText = "visibility:hidden"; document.body.appendChild(p); const r = getComputedStyle(p).position === "absolute"; p.remove(); return r; };
+  if (ok()) return;
+  for (const url of ["vendor/leaflet/leaflet.css", "leaflet.css", "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"]) {
+    const l = document.createElement("link"); l.rel = "stylesheet"; l.href = url; l.className = "leafcss";
+    await new Promise((res) => { l.onload = res; l.onerror = res; document.head.appendChild(l); setTimeout(res, 4000); });
+    if (ok()) return;
+    l.remove();
+  }
+}
 async function cmInit() {
   const el = $("#cmel");
   if (!el) return;
   try {
-    if (!$("#leafcss")) document.head.insertAdjacentHTML("beforeend", `<link id="leafcss" rel="stylesheet" href="vendor/leaflet/leaflet.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'">`);
-    await loadScript("vendor/leaflet/leaflet.js");
+    await cmCss();
+    try { await loadScript("vendor/leaflet/leaflet.js"); } catch (e) { await loadScript("leaflet.js"); }
+    if (!window.L?.map) { delete _scripts["vendor/leaflet/leaflet.js"]; await loadScript("leaflet.js"); }
   } catch (e) { el.innerHTML = `<div class="empty"><h2>Carte indisponible</h2><p>${esc(friendly(e))}</p></div>`; return; }
   if (CM.map) { try { CM.map.remove(); } catch (e) {} }
   CM.markers = {}; CM.placing = null;
@@ -160,6 +173,7 @@ async function cmInit() {
   if (CM.sel && byId(db.chantiers, CM.sel)) cmSelect(CM.sel, true); else CM.sel = null;
   cmGeocodeMissing();
   setTimeout(() => map.invalidateSize(), 200);
+  try { new ResizeObserver(() => { if (CM.map === map) map.invalidateSize(); }).observe(el); } catch (e) {}
 }
 function cmDraw(fit) {
   const map = CM.map; if (!map) return;
