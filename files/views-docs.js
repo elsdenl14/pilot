@@ -395,7 +395,8 @@ async function docForm(K, d, opts = {}) {
         </div>
       </div>
     </div></div>
-    <aside class="sheet-prev" id="shpv" hidden><div class="sp-h"><b>Aperçu du PDF</b><span id="shpvst" class="mut"></span></div><iframe id="shpvf" title="Aperçu du PDF"></iframe></aside>
+    <div class="sp-grip" id="shgrip" hidden role="separator" aria-orientation="vertical" tabindex="0" title="Glisser pour répartir l'espace entre le texte et l'aperçu (double-clic : remettre)"><i></i></div>
+    <aside class="sheet-prev" id="shpv" hidden><div class="sp-h"><b>Aperçu du PDF</b><span class="sp-sz" title="Répartition de l'espace"><button type="button" data-spw="68" aria-label="Plus de place pour le texte">Texte</button><button type="button" data-spw="50" aria-label="Moitié moitié">50/50</button><button type="button" data-spw="34" aria-label="Plus de place pour l'aperçu">PDF</button></span><span id="shpvst" class="mut"></span></div><div id="shpvf" class="pvpages" aria-label="Aperçu du PDF"></div></aside>
   </div>`;
   modal(d ? `Modifier ${esc(docNum(d, K))}` : K === "devis" ? "Nouveau devis" : "Nouvelle facture", body, {
     xl: true, wide: true, submit: d ? "Enregistrer" : "Créer le brouillon", extra: `<span id="edstat" class="edstat"></span>`,
@@ -433,7 +434,7 @@ async function docForm(K, d, opts = {}) {
 }
 
 /* ---------- PDF ---------- */
-const _assets = new Map();
+const _assets = new Map(), _dzP = {};
 async function getAsset(path) {
   if (!path) return null;
   if (_assets.has(path)) return _assets.get(path);
@@ -448,9 +449,17 @@ async function pdfContext(K) {
   const path = K === "devis" ? e.modele_devis_fichier : e.modele_facture_fichier;
   const ctx = { ent: e, regl };
   try {
-    if (path) ctx.fond = { bytes: await getAsset(path) };
-    else if (e.logo_path) ctx.logo = { bytes: await getAsset(e.logo_path) };
-  } catch (err) { toast("Modèle importé illisible : le modèle classique est utilisé. " + esc(err.message), "dn"); }
+    // Design importé : seules la forme et les couleurs sont reprises (analyse), le contenu s'adapte à chaque document
+    if (path) {
+      let dz = regl[K]?.design;
+      if (!dz && typeof modeleAnalyse === "function") {
+        _dzP[path] ||= getAsset(path).then(modeleAnalyse).then(async (r) => { await saveRegl((x) => { x[K] ||= {}; x[K].design = r; }); return r; });
+        dz = await _dzP[path];
+      }
+      ctx.design = dz || null;
+    }
+    if (e.logo_path) ctx.logo = { bytes: await getAsset(e.logo_path) };
+  } catch (err) { toast("Design importé illisible : le modèle classique est utilisé. " + esc(err.message), "dn"); }
   return ctx;
 }
 async function docPdfBytes(K, id) {
@@ -474,12 +483,35 @@ async function docPdfBytes(K, id) {
   if (typeof cxPdfImages === "function") pctx.images = await cxPdfImages(lignes);
   return PilotPdf.build(data, pctx);
 }
+// Affiche un PDF dans un conteneur avec pdf.js (canvas) : fonctionne même quand le navigateur refuse les PDF dans une iframe
+async function pdfRender(host, bytes, o = {}) {
+  const my = (host._seq = (host._seq || 0) + 1);
+  host._bytes = bytes;
+  try {
+    const pdfjs = await import(LIBS.pdfjs); pdfjs.GlobalWorkerOptions.workerSrc = LIBS.pdfjsWorker;
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes) }).promise;
+    const wrap = document.createElement("div"); wrap.className = "pv-pages";
+    const cssW = Math.max(240, (host.clientWidth || 600) - 24), dpr = Math.min(2, window.devicePixelRatio || 1);
+    for (let n = 1; n <= doc.numPages; n++) {
+      if (my !== host._seq) return;
+      const pg = await doc.getPage(n), vp0 = pg.getViewport({ scale: 1 }), sc = (cssW / vp0.width) * dpr, vp = pg.getViewport({ scale: sc });
+      const cv = document.createElement("canvas"); cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height); cv.style.width = cssW + "px"; cv.style.height = Math.floor((vp.height / dpr)) + "px";
+      await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+      wrap.appendChild(cv);
+    }
+    if (my !== host._seq) return;
+    const st = host.scrollTop; host.replaceChildren(wrap); host.scrollTop = st;
+    if (!host._ro && window.ResizeObserver) { let t = 0, w0 = host.clientWidth; host._ro = new ResizeObserver(() => { if (Math.abs(host.clientWidth - w0) < 8) return; w0 = host.clientWidth; clearTimeout(t); t = setTimeout(() => host._bytes && pdfRender(host, host._bytes), 250); }); host._ro.observe(host); }
+    if (o.onDone) o.onDone();
+  } catch (e) { console.warn("Affichage du PDF impossible", e); if (my === host._seq) host.innerHTML = `<p class="mut" style="padding:16px">Impossible d'afficher l'aperçu ici. Utilisez « Ouvrir dans un onglet » ou « Télécharger le PDF ».</p>`; if (o.onError) o.onError(e); }
+}
 function openPdfModal(title, bytes, filename) {
   const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  const api = modal(title, `<iframe class="pdfbox" src="${url}#toolbar=0" title="${esc(title)}"></iframe>
+  const api = modal(title, `<div class="pdfbox pvpages" id="pdfhost" aria-label="${esc(title)}"><p class="mut" style="padding:16px">Génération de l'aperçu…</p></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><a class="btn o" href="${url}" target="_blank" rel="noopener">Ouvrir dans un onglet</a><button type="button" class="btn o" id="pp">Imprimer</button><a class="btn" href="${url}" download="${esc(filename)}">Télécharger le PDF</a></div>`,
     { xl: true, wide: true, submit: false, noFocus: true });
-  $("#pp", api.el).onclick = () => { try { $("iframe", api.el).contentWindow.print(); } catch (e) { window.open(url); } };
+  pdfRender($("#pdfhost", api.el), bytes);
+  $("#pp", api.el).onclick = () => { const w = window.open(url); try { w.addEventListener("load", () => w.print()); } catch (e) { /* ignoré */ } };
   const close = api.close;
   api.close = () => { close(); setTimeout(() => URL.revokeObjectURL(url), 2000); };
   $$("[data-x]", api.el).forEach((b) => (b.onclick = api.close));

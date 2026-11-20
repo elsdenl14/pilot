@@ -61,7 +61,7 @@ const PilotPdf = (() => {
     const ent = ctx.ent || {};
     const regl = ctx.regl || {};
     const kind = data.kind;
-    const accent = hex(regl.couleur);
+    const dz = ctx.design || null, accent = hex(dz?.couleur || regl.couleur);
     const A = rgb(...accent);
     const ASoft = rgb(...accent.map((c) => c * 0.08 + 0.92));
     const INK = rgb(0.1, 0.11, 0.13),
@@ -86,8 +86,9 @@ const PilotPdf = (() => {
       else if (t === "jpg") logo = await pdf.embedJpg(ctx.logo.bytes);
     }
     const tpl = regl[kind] || {};
-    const topM = bg ? Number(tpl.top ?? 150) : 42;
-    const botM = bg ? Number(tpl.bottom ?? 90) : 78;
+    const bandT = !bg && dz?.haut?.h ? dz.haut : null, bandB = !bg && dz?.bas?.h ? dz.bas : null, fb = bandB ? bandB.h : 0;
+    const topM = bg ? Number(tpl.top ?? 150) : bandT ? Math.max(42, bandT.h + 18) : 42;
+    const botM = bg ? Number(tpl.bottom ?? 90) : 78 + fb;
 
     let page, y;
     const drawBg = (p) => {
@@ -107,7 +108,9 @@ const PilotPdf = (() => {
     const newPage = (first = false) => {
       page = pdf.addPage([W, H]);
       drawBg(page);
-      if (!bg) page.drawRectangle({ x: 0, y: H - 5, width: W, height: 5, color: A });
+      if (bandT) page.drawRectangle({ x: 0, y: H - bandT.h, width: W, height: bandT.h, color: rgb(...hex(bandT.color)) });
+      else if (!bg) page.drawRectangle({ x: 0, y: H - 5, width: W, height: 5, color: A });
+      if (bandB) page.drawRectangle({ x: 0, y: 0, width: W, height: bandB.h, color: rgb(...hex(bandB.color)) });
       if (data.statut === "Brouillon") {
         const ww = bold.widthOfTextAtSize("BROUILLON", 96), a = (35 * Math.PI) / 180;
         page.drawText("BROUILLON", { x: W / 2 - (ww / 2) * Math.cos(a), y: H / 2 - (ww / 2) * Math.sin(a), size: 96, font: bold, color: rgb(0.94, 0.94, 0.95), rotate: degrees(35) });
@@ -501,16 +504,16 @@ const PilotPdf = (() => {
     pages.forEach((p, i) => {
       page = p;
       if (!bg) {
-        p.drawLine({ start: { x: ML, y: 56 }, end: { x: W - ML, y: 56 }, thickness: 0.5, color: LINE });
+        p.drawLine({ start: { x: ML, y: 56 + fb }, end: { x: W - ML, y: 56 + fb }, thickness: 0.5, color: LINE });
         const foot = [
           [ent.nom, ent.forme_juridique, ent.siret ? "SIRET " + ent.siret : null, ent.tva_intracom ? "TVA " + ent.tva_intracom : null, ent.rcs].filter(Boolean).join("  -  "),
           ent.mentions_legales,
         ].filter(Boolean);
-        let fy = 44;
+        let fy = 44 + fb;
         for (const f of foot) for (const l of wrap(f, font, 7, W - 2 * ML).slice(0, 2)) { txt(l, W / 2 - font.widthOfTextAtSize(clean(l), 7) / 2, fy, { size: 7, color: GREY }); fy -= 9; }
       }
-      if (data.empreinte) txt(`Empreinte d'intégrité SHA-256 : ${data.empreinte.slice(0, 32)}`, ML, 24, { size: 6.5, color: GREY });
-      if (pages.length > 1) txt(`Page ${i + 1} / ${pages.length}`, W - ML, bg ? 24 : 24, { size: 7.5, color: GREY, right: true });
+      if (data.empreinte) txt(`Empreinte d'intégrité SHA-256 : ${data.empreinte.slice(0, 32)}`, ML, 24 + fb, { size: 6.5, color: GREY });
+      if (pages.length > 1) txt(`Page ${i + 1} / ${pages.length}`, W - ML, 24 + fb, { size: 7.5, color: GREY, right: true });
     });
 
     pdf.setTitle(`${title} ${data.numero || ""}`);

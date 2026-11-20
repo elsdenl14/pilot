@@ -171,14 +171,23 @@ function shPreview(m, K, d) {
     try {
       const bytes = await shLiveBytes(m, K, d);
       if (my !== seq || !document.body.contains(m)) return;
-      const u = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      fr.src = u + "#toolbar=0&navpanes=0";
-      if (url) { const o = url; setTimeout(() => URL.revokeObjectURL(o), 4000); }
-      url = u; st.textContent = "À jour";
+      await pdfRender(fr, bytes, { onDone: () => { if (my === seq) st.textContent = "À jour"; }, onError: () => { st.textContent = "Aperçu indisponible"; } });
     } catch (e) { st.textContent = "Aperçu indisponible"; console.warn(e); }
   };
   const sched = () => { if (!on) return; st.textContent = "Mise à jour…"; clearTimeout(timer); timer = setTimeout(build, 700); };
-  btn.onclick = () => { on = !on; pv.hidden = !on; m.classList.toggle("prev", on); btn.setAttribute("aria-pressed", String(on)); btn.textContent = on ? "Masquer l'aperçu" : "Aperçu PDF en direct"; try { localStorage.setItem("pilot.edprev", on ? "1" : "0"); } catch (e) { /* ignoré */ } if (on) build(); };
+  const grip = $("#shgrip", m), wrap = $("#shw", m);
+  const setW = (pct, save = true) => { pct = Math.max(28, Math.min(74, pct)); wrap.style.setProperty("--edw", pct + "%"); if (save) { try { localStorage.setItem("pilot.edw", String(Math.round(pct))); } catch (e) { /* ignoré */ } } };
+  try { const w0 = Number(localStorage.getItem("pilot.edw")); if (w0) setW(w0, false); } catch (e) { /* ignoré */ }
+  if (grip) {
+    grip.addEventListener("pointerdown", (e) => { e.preventDefault(); grip.setPointerCapture(e.pointerId); grip.classList.add("drag"); document.body.classList.add("sp-resizing"); });
+    grip.addEventListener("pointermove", (e) => { if (!grip.classList.contains("drag")) return; const r = wrap.getBoundingClientRect(); setW(((e.clientX - r.left) / r.width) * 100, false); });
+    const end = (e) => { if (!grip.classList.contains("drag")) return; grip.classList.remove("drag"); document.body.classList.remove("sp-resizing"); const r = wrap.getBoundingClientRect(); setW(((e.clientX - r.left) / r.width) * 100); };
+    grip.addEventListener("pointerup", end); grip.addEventListener("pointercancel", end);
+    grip.addEventListener("dblclick", () => setW(58));
+    grip.addEventListener("keydown", (e) => { const cur = parseFloat(wrap.style.getPropertyValue("--edw")) || 58; if (e.key === "ArrowLeft") { e.preventDefault(); setW(cur - 3); } if (e.key === "ArrowRight") { e.preventDefault(); setW(cur + 3); } });
+  }
+  pv.addEventListener("click", (e) => { const b = e.target.closest("[data-spw]"); if (b) setW(Number(b.dataset.spw)); });
+  btn.onclick = () => { on = !on; pv.hidden = !on; if (grip) grip.hidden = !on; m.classList.toggle("prev", on); btn.setAttribute("aria-pressed", String(on)); btn.textContent = on ? "Masquer l'aperçu" : "Aperçu PDF en direct"; try { localStorage.setItem("pilot.edprev", on ? "1" : "0"); } catch (e) { /* ignoré */ } if (on) build(); };
   let pref = null; try { pref = localStorage.getItem("pilot.edprev"); } catch (e) { /* ignoré */ }
   if (pref === "1" || (pref === null && window.innerWidth >= 1280)) setTimeout(() => btn.click(), 200);
   ["input", "change", "sheet-changed"].forEach((ev) => m.addEventListener(ev, sched));

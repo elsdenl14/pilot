@@ -416,8 +416,7 @@ const modeleBlock = (K, label) => {
   return `<div class="cb" style="${K === "facture" ? "border-top:1px solid var(--line2)" : ""}"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
     <div><b>${label}</b><div class="mut">${path ? `Votre design importé : <b>${esc(fname)}</b>` : "Modèle classique Pilot (simple, en noir et blanc avec une couleur d'accent)"}</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${btn(path ? "Remplacer mon design" : "Importer mon design", "modelePick", "", K, "o sm w")}${path ? btn("Revenir au classique", "modeleDel", "", K, "o sm w") : ""}${btn("Aperçu", "modelePreview", "", K, "o sm")}</div></div>
-    ${path ? `<div class="frm" style="margin-top:12px;max-width:420px"><label class="fl"><span>Marge haute (mm)</span><input type="text" inputmode="decimal" data-marge="${K}:top" value="${Math.round(((tp.top ?? 150) / MM) * 10) / 10}"></label><label class="fl"><span>Marge basse (mm)</span><input type="text" inputmode="decimal" data-marge="${K}:bottom" value="${Math.round(((tp.bottom ?? 90) / MM) * 10) / 10}"></label>
-      <small class="mut full" style="grid-column:1/-1">Espace laissé libre en haut et en bas de chaque page pour votre en-tête et votre pied de page. Cliquez sur « Aperçu » pour vérifier.</small></div>` : ""}</div>`;
+    ${path ? (() => { const dz = tp.design; const sw = (c) => c ? `<span style="display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:4px;border:1px solid var(--line);background:${esc(c)}"></span>${esc(c)}` : "aucune"; return `<div style="margin-top:12px"><div class="mut">${dz ? `Design repris : couleur ${sw(dz.couleur)} · bandeau haut : ${dz.haut ? sw(dz.haut.color) : "non"} · bandeau bas : ${dz.bas ? sw(dz.bas.color) : "non"}` : "Design en cours d'analyse (au prochain aperçu)."}</div><small class="mut">Pilot ne garde que la forme et les couleurs de votre fichier : le contenu (client, lignes, totaux, mentions) est recalculé et mis en page à chaque nouveau document.</small></div>`; })() : ""}</div>`;
 };
 V.params = () => {
   const e = db.ent, regl = e.pdf_reglages || {};
@@ -430,7 +429,7 @@ V.params = () => {
     <div class="pa w" style="margin:16px 0"><button class="btn" type="submit">Enregistrer</button></div></form>
     ${card("Documents PDF : devis et factures", `<div class="cb" style="display:flex;gap:22px;flex-wrap:wrap;align-items:center"><label class="fl"><span>Couleur d'accent (modèle classique)</span><input type="color" class="swatch" id="couleur" value="${esc(regl.couleur || "#243b53")}" ${ro ? "disabled" : ""}></label>
       <div class="fl"><span>Logo (modèle classique)</span><div style="display:flex;gap:8px;align-items:center">${e.logo_path ? `<span class="badge-auto">Logo enregistré</span>${btn("Retirer", "logoDel", "", "", "o sm w")}` : ""}${btn(e.logo_path ? "Remplacer" : "Importer un logo", "logoPick", "", "", "o sm w")}</div></div></div>
-      <p class="note" style="border-top:1px solid var(--line2)">Importez votre propre design de devis ou de facture (PDF, PNG ou JPG, une page A4) : Pilot le place en fond de chaque page et écrit le contenu par-dessus, à chaque génération.</p>
+      <p class="note" style="border-top:1px solid var(--line2)">Importez votre propre design de devis ou de facture (PDF, PNG ou JPG, une page A4) : Pilot en reprend uniquement la forme et les couleurs (couleur d'accent, bandeaux haut et bas) et adapte le contenu à chaque devis ou facture.</p>
       ${modeleBlock("devis", "Devis")}${modeleBlock("facture", "Facture")}`)}
     ${rgRibCard()}
     ${typeof lgCard === "function" ? lgCard() : ""}
@@ -469,6 +468,49 @@ async function pickFile(accept, cb) {
   i.onchange = async () => { if (i.files[0]) { try { await cb(i.files[0]); } catch (e) { toast(esc(friendly(e)), "dn"); } } };
   i.click();
 }
+// Analyse un design importé (PDF, PNG, JPG) : on n'en garde que la forme (couleur d'accent, bandeaux haut et bas), jamais le texte ni les lignes
+async function modeleAnalyse(bytes) {
+  const t = sniff(bytes), cv = document.createElement("canvas"), W0 = 360;
+  const g = () => cv.getContext("2d", { willReadFrequently: true });
+  if (t === "pdf") {
+    const pdfjs = await import(LIBS.pdfjs); pdfjs.GlobalWorkerOptions.workerSrc = LIBS.pdfjsWorker;
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes) }).promise, pg = await doc.getPage(1), v0 = pg.getViewport({ scale: 1 }), vp = pg.getViewport({ scale: W0 / v0.width });
+    cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height); g().fillStyle = "#fff"; g().fillRect(0, 0, cv.width, cv.height);
+    await pg.render({ canvasContext: g(), viewport: vp }).promise;
+  } else {
+    const bmp = await createImageBitmap(new Blob([bytes])); cv.width = W0; cv.height = Math.round((bmp.height * W0) / bmp.width);
+    g().fillStyle = "#fff"; g().fillRect(0, 0, cv.width, cv.height); g().drawImage(bmp, 0, 0, cv.width, cv.height);
+  }
+  const w = cv.width, h = cv.height, d = g().getImageData(0, 0, w, h).data, ptPerPx = 841.89 / h;
+  const px = (x, y) => { const i = (y * w + x) * 4; return [d[i], d[i + 1], d[i + 2]]; };
+  const white = (c) => c[0] > 235 && c[1] > 235 && c[2] > 235, dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+  const hx = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+  const band = (top) => {
+    let n = 0, ref = null;
+    for (let k = 0; k < h * 0.3; k++) {
+      const y = top ? k : h - 1 - k, c = px(3, y);
+      if (white(c) || (ref && dist(c, ref) > 60)) break;
+      let same = 0, tot = 0; for (let x = 0; x < w; x += 3) { tot++; if (dist(px(x, y), c) < 60) same++; }
+      if (same / tot < 0.7) break;
+      ref ||= c; n++;
+    }
+    return n * ptPerPx >= 14 ? { color: hx(ref), h: Math.round(n * ptPerPx) } : null;
+  };
+  const haut = band(true), bas = band(false);
+  const bins = new Map();
+  for (let i = 0; i < d.length; i += 16) {
+    const r = d[i], gg = d[i + 1], b = d[i + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+    if (mx < 60 || (mx - mn) / mx < 0.28) continue;
+    const key = (r >> 4) + "," + (gg >> 4) + "," + (b >> 4), o = bins.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+    o.n++; o.r += r; o.g += gg; o.b += b; bins.set(key, o);
+  }
+  const top1 = [...bins.values()].sort((a, b) => b.n - a.n)[0];
+  const dom = top1 && top1.n > 12 ? hx([top1.r / top1.n, top1.g / top1.n, top1.b / top1.n]) : null;
+  const sat = (c) => { const v = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)), mx = Math.max(...v), mn = Math.min(...v); return mx ? (mx - mn) / mx : 0; };
+  const dark = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)).reduce((a, b) => a + b, 0) < 330;
+  const couleur = [haut?.color, bas?.color].find((c) => c && (sat(c) > 0.25 || dark(c))) || dom || haut?.color || bas?.color || null;
+  return { couleur, haut, bas };
+}
 async function modelePick(K) {
   if (!guard()) return;
   pickFile(".pdf,image/png,image/jpeg", async (f) => {
@@ -478,10 +520,11 @@ async function modelePick(K) {
     toast("Import du modèle…");
     const col = K === "devis" ? "modele_devis_fichier" : "modele_facture_fichier", old = db.ent[col];
     const path = await uploadDoc(f, "modeles");
-    await saveRegl((r) => { r[K] ||= {}; r[K].top ??= 150; r[K].bottom ??= 90; });
+    const dz = await modeleAnalyse(bytes);
+    await saveRegl((r) => { r[K] ||= {}; r[K].design = dz; });
     await entPatch({ [col]: path });
     if (old) { _assets.delete(old); sb.storage.from("documents").remove([old]); }
-    toast("Votre design est enregistré : il sera utilisé pour tous les " + (K === "devis" ? "devis" : "factures") + ". Vérifiez les marges avec l'aperçu.", "ok");
+    toast("Design analysé : Pilot en a repris les couleurs et les bandeaux, et adapte le contenu à chaque " + (K === "devis" ? "devis" : "facture") + ".", "ok");
     await refresh();
     modelePreview(K);
   });
