@@ -209,7 +209,7 @@ function ligneRow(l = {}) {
 function groupCats(ls, composite = false) {
   const out = [];
   for (const l of ls.length ? ls : [{}]) {
-    const c = String(l.categorie || "").trim(), k = typeof mkKey === "function" ? mkKey(l) : c, last = out[out.length - 1];
+    const c0 = String(l.categorie || "").trim(), c = c0.replace(/\u200B/g, ""), k = typeof mkKey === "function" ? mkKey(l) : c0, last = out[out.length - 1];
     if (last && last.k === k) last.lignes.push(l);
     else out.push({ k, cat: composite && typeof mkLabel === "function" ? mkLabel(l) : c, lot: l.lot || "", sous_lot: l.sous_lot || "", tranche: l.tranche || "", tranche_cond: !!l.tranche_cond, tranche_ok: !!l.tranche_ok, lignes: [l] });
   }
@@ -220,8 +220,8 @@ const catBlock = (g) => `<section class="cat"><div class="cat-h"><button type="b
   <div class="addbar"><span>Ajouter :</span>${["fourniture", "main_oeuvre", "sous_traitance", "materiel", "divers"].map((t) => `<button type="button" class="chip-b t-${t}" data-addt="${t}">${PREST[t]}</button>`).join("")}<button type="button" class="chip-b" data-addt="ouvrage">Ouvrage</button><button type="button" class="addl" data-addl>Ligne vide</button></div></section>`;
 function readLignes(root) {
   const out = [];
-  $$(".cat", root).forEach((sec) => {
-    const categorie = $('[data-f="cat"]', sec).value.trim();
+  $$(".cat", root).forEach((sec, si) => {
+    const categorie = $('[data-f="cat"]', sec).value.trim() + (si % 2 ? "\u200B" : "");
     const mkc = cxCurK === "devis" && typeof mkReadCat === "function" ? mkReadCat(sec) : {};
     $$(".lr", sec).forEach((tr) => out.push({
       ...(cxCurK === "devis" ? (cxApplyMetre(tr), cxRead(tr), { ...cxRead(tr), ...mkc, ...(typeof mkReadLine === "function" ? mkReadLine(tr) : {}) }) : {}),
@@ -411,6 +411,8 @@ async function docForm(K, d, opts = {}) {
     onSubmit: async (v, api) => {
       const ls = readLignes(api.el).filter((l) => l.designation || l.prix_unitaire_ht || l.type_ligne === "image");
       if (!ls.some(docRealLine)) throw new Error("Ajoutez au moins une ligne avec une désignation et un prix.");
+      const vide = $$(".cat", api.el).find((sc) => $('[data-f="cat"]', sc).value.trim() && !$$(".lr", sc).some((tr) => $('[data-f="des"]', tr).value.trim() || parseNum($('[data-f="pu"]', tr).value)));
+      if (vide) { vide.classList.remove("fold"); vide.scrollIntoView({ block: "center", behavior: "smooth" }); throw new Error(`La section « ${$('[data-f="cat"]', vide).value.trim()} » est vide : ajoutez-y une ligne ou supprimez-la.`); }
       const cid = await resolveClient(v);
       const adj = K === "facture" && db.v8 && $("#f_aj_ret", api.el) ? fxReadAdj(v) : null;
       if (adj?.autoliquidation) ls.forEach((l) => (l.taux_tva = 0));

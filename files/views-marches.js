@@ -5,8 +5,8 @@
 const MK_FMT = ["DPGF", "DQE", "BPU"];
 const MK_FMT_L = { DPGF: "DPGF : décomposition du prix global et forfaitaire", DQE: "DQE : détail quantitatif estimatif", BPU: "BPU : bordereau des prix unitaires" };
 const mkOff = (l) => !!(l && l.tranche_cond && !l.tranche_ok);
-const mkCat = (l) => String(l.categorie || "").trim();
-const mkKey = (l) => [mkCat(l), l.lot || "", l.sous_lot || "", l.tranche || "", l.tranche_cond ? 1 : 0].join("\u0001");
+const mkCat = (l) => String(l.categorie || "").replace(/\u200B/g, "").trim();
+const mkKey = (l) => [String(l.categorie || "").trim(), l.lot || "", l.sous_lot || "", l.tranche || "", l.tranche_cond ? 1 : 0].join("\u0001");
 const mkLabel = (l) => [l.lot, l.sous_lot, mkCat(l)].filter(Boolean).join(" › ");
 const mkExt = (l) => ({ lot: l.lot || null, sous_lot: l.sous_lot || null, tranche: l.tranche || null, tranche_cond: !!l.tranche_cond, tranche_ok: !!l.tranche_cond && !!l.tranche_ok, marche_ref: l.marche_ref || null });
 const mkLht = (l) => r2(Number(l.quantite) * Number(l.prix_unitaire_ht));

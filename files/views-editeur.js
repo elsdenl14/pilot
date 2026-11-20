@@ -114,7 +114,8 @@ function shAddRow(m, l, focusField = "des") {
   recalcLignes(m);
   const f = $(`[data-f="${focusField}"]`, tr) || $('[data-f="des"]', tr);
   if (f && f.type !== "hidden") { f.focus(); f.select?.(); }
-  tr.scrollIntoView({ block: "center", behavior: "smooth" });
+  tr.classList.add("row-in"); setTimeout(() => tr.classList.remove("row-in"), 400);
+  tr.scrollIntoView({ block: "nearest", behavior: "smooth" });
   return tr;
 }
 // Ajoute une ligne d'un type donné (fourniture, main d'œuvre, sous-traitance, matériel, divers) dans une section
@@ -198,7 +199,7 @@ function edSheet(m, K, d, o = {}) {
   m.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && e.target.matches(".sheet input") && !e.target.closest(".cat") && e.target.id !== "qaq") e.preventDefault(); });
 
   // la description d'une ligne reste ouverte un court instant après la perte du focus (évite un saut de mise en page au clic sur un bouton)
-  m.addEventListener("focusin", (e) => { const sc = e.target.closest?.(".cat"); if (sc && sc !== m._cur) { m._cur = sc; $$(".cat", m).forEach((x) => x.classList.toggle("active", x === sc)); $$(".sn", m).forEach((b, i) => b.classList.toggle("on", $$(".cat", m)[i] === sc)); } const tr = e.target.closest?.("tr.lr"); if (tr) { clearTimeout(tr._dt); tr.classList.add("dopen"); } });
+  m.addEventListener("focusin", (e) => { if (e.target.matches?.('input[data-f="qte"],input[data-f="pu"],input[data-f="uni"]')) setTimeout(() => e.target.select?.(), 0); const sc = e.target.closest?.(".cat"); if (sc && sc !== m._cur) { m._cur = sc; $$(".cat", m).forEach((x) => x.classList.toggle("active", x === sc)); $$(".sn", m).forEach((b, i) => b.classList.toggle("on", $$(".cat", m)[i] === sc)); } const tr = e.target.closest?.("tr.lr"); if (tr) { clearTimeout(tr._dt); tr.classList.add("dopen"); } });
   m.addEventListener("focusout", (e) => { const tr = e.target.closest?.("tr.lr"); if (tr) { clearTimeout(tr._dt); tr._dt = setTimeout(() => { if (!tr.contains(document.activeElement)) tr.classList.remove("dopen"); }, 350); } });
 
   // boutons d'ajout
@@ -208,6 +209,7 @@ function edSheet(m, K, d, o = {}) {
     const at = t.closest("[data-addt]"); if (at) return shAddTyped(m, at.dataset.addt, at.closest(".cat"));
     const gt = t.closest("[data-goto]"); if (gt) { const sc = $$(".cat", m)[Number(gt.dataset.goto)]; if (sc) { sc.classList.remove("fold"); m._cur = sc; sc.scrollIntoView({ block: "start", behavior: "smooth" }); sc.classList.add("flash"); setTimeout(() => sc.classList.remove("flash"), 1200); recalcLignes(m); } return; }
     const fa = t.closest("[data-foldall]"); if (fa) { $$(".cat", m).forEach((sc) => sc.classList.toggle("fold", fa.dataset.foldall === "1")); return recalcLignes(m); }
+    const hh = t.closest(".cat-h.cat-h"); if (hh && !t.closest("input,button,.dg-h") && hh.closest(".cat").classList.contains("fold")) { hh.closest(".cat").classList.remove("fold"); return recalcLignes(m); }
     const fd = t.closest("[data-fold]"); if (fd) { fd.closest(".cat").classList.toggle("fold"); return recalcLignes(m); }
     if (id === "addfour") return shAddRow(m, { unite: "u" });
     if (id === "addmo") { const tx = Number(db.ent.taux_horaire_vente) || 0; return shAddRow(m, { designation: "Main d'œuvre", unite: "h", prix_unitaire_ht: tx > 0 ? tx : undefined }, tx > 0 ? "qte" : "pu"); }
@@ -219,11 +221,11 @@ function edSheet(m, K, d, o = {}) {
     const al = t.closest("[data-addl]");
     if (al) { const lb = $(".lb", al.closest(".cat")); lb.insertAdjacentHTML("beforeend", ligneRow({ taux_tva: Number($('[data-f="tva"]', lb.lastElementChild)?.value) || undefined })); $$('[data-f="des"]', lb).pop().focus(); return recalcLignes(m); }
     const rc = t.closest("[data-rmcat]");
-    if (rc) { const sec = rc.closest(".cat"); if ($$(".lr", sec).some(hasContent) && !confirm("Supprimer cette section et toutes ses lignes ?")) return; sec.remove(); return recalcLignes(m); }
+    if (rc) { const sec = rc.closest(".cat"); if ($$(".lr", sec).some(hasContent) && !confirm("Supprimer cette section et toutes ses lignes ?")) return; sec.classList.add("out"); return void setTimeout(() => { sec.remove(); recalcLignes(m); }, 170); }
     const uc = t.closest("[data-upcat]"); if (uc) { const s = uc.closest(".cat"), p = s.previousElementSibling; if (p?.classList.contains("cat")) { p.before(s); recalcLignes(m); } return; }
     const dc = t.closest("[data-downcat]"); if (dc) { const s = dc.closest(".cat"), n = s.nextElementSibling; if (n?.classList.contains("cat")) { n.after(s); recalcLignes(m); } return; }
     const rm = t.closest("[data-rm]");
-    if (rm) { rm.closest("tr").remove(); return recalcLignes(m); }
+    if (rm) { const tr = rm.closest("tr"); tr.classList.add("out"); return void setTimeout(() => { tr.remove(); recalcLignes(m); }, 150); }
   });
 
   // glisser-déposer des lignes et des sections

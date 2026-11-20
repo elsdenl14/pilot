@@ -1194,3 +1194,32 @@ select.typ-ouvrage { color: var(--acc); border-color: var(--acc); }
 .sheet tr.lr.dopen details.cx { display: block; }
 .sheet .cat-more { margin: 0; padding: 2px 10px; font-size: 12px; color: var(--mut); }
 .c-u { width: 84px; } .sheetmd.prev .c-u { width: 64px; }
+
+/* v25c : manipulation fluide (animations courtes, cibles plus grandes, retours visuels) */
+.sheet button, .sheet summary, .sheet select, .sheet .dg-h, .secnav button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.sheet .btn, .sheet .chip-b, .sheet .rm, .sheet .sn, .sheet .addl, .secnav .sn { transition: background-color .15s, border-color .15s, color .15s, transform .08s, box-shadow .15s; }
+.sheet .btn:active, .sheet .chip-b:active, .sheet .sn:active, .sheet .rm:active { transform: scale(.96); }
+.sheet .btn.o:hover, .sheet .chip-b:hover { background: var(--accb); border-color: var(--acc); color: var(--acc); }
+.sheet .rm { min-width: 30px; min-height: 30px; border-radius: 6px; }
+.sheet .rm:hover { background: var(--accb); color: var(--acc); }
+.sheet .rm[data-rm]:hover, .sheet .rm[data-rmcat]:hover { background: #fde8e8; color: #c0392b; }
+.sheet .sh-add .btn { min-height: 38px; }
+.addbar .chip-b { padding: 6px 12px; font-size: 13px; }
+.sheet .dg-h { cursor: grab; padding: 6px 5px; border-radius: 4px; }
+.sheet .dg-h:active { cursor: grabbing; }
+.sheet table.lines tr.lr { transition: background-color .15s; }
+.sheet table.lines tr.lr:hover { background: rgba(120,150,190,.07); }
+.sheet table.lines tr.lr:focus-within { background: var(--accb); }
+.sheet table.lines td input:not([type="hidden"]), .sheet table.lines td select[data-f], .sheet table.lines td textarea { transition: border-color .12s, background-color .12s, box-shadow .12s; }
+.sheet table.lines td input:focus, .sheet table.lines td select:focus, .sheet table.lines td textarea:focus { box-shadow: 0 0 0 3px var(--accb); }
+@keyframes rowin { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes catin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.sheet tr.row-in { animation: rowin .22s ease-out; }
+.sheet .cat { animation: catin .22s ease-out; }
+.sheet tr.out { opacity: 0; transition: opacity .14s; }
+.sheet .cat.out { opacity: 0; transform: scale(.99); transition: opacity .16s, transform .16s; }
+.sheet .cat.fold .cat-h { cursor: pointer; }
+.sheet .cat-h .cat-n { cursor: pointer; }
+.sheet .cat.dragging, .sheet tr.dragging { opacity: .5; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.secnav .sn { min-height: 40px; }
+@media (prefers-reduced-motion: reduce) { .sheet *, .secnav * { animation: none !important; transition: none !important; } }

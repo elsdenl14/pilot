@@ -218,7 +218,7 @@ const PilotPdf = (() => {
     const lht = (l) => r2(Number(l.quantite) * Number(l.prix_unitaire_ht));
     const inc = (l) => l.type_ligne !== "image" && (!l.est_option || l.option_choisie) && !(l.tranche_cond && !l.tranche_ok);
     const lotKey = (l) => (typeof mkKey === "function" ? mkKey(l) : String(l.categorie || "").trim());
-    const lotLab = (l) => (typeof mkLabel === "function" ? mkLabel(l) : String(l.categorie || "").trim());
+    const lotLab = (l) => (typeof mkLabel === "function" ? mkLabel(l) : String(l.categorie || "").replace(/\u200B/g, "").trim());
     const condOff = lignes.filter((l) => l.tranche_cond && !l.tranche_ok && l.type_ligne !== "image");
     const byRate = {};
     for (const l of lignes.filter(inc)) {
