@@ -159,6 +159,10 @@ const PilotPdf = (() => {
     }
     page.drawLine({ start: { x: ML, y }, end: { x: W - ML, y }, thickness: 0.8, color: LINE });
     y -= 16;
+    if (data.titre) {
+      for (const ll of wrap(String(data.titre), bold, 12.5, W - 2 * ML).slice(0, 2)) { need(20); txt(ll, ML, y - 4, { size: 12.5, f: bold, color: INK }); y -= 17; }
+      y -= 4;
+    }
 
     // ---- Client (gauche) et dates (droite) ----
     const c = data.client || {};

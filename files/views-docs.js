@@ -6,6 +6,8 @@ const KD = {
 };
 const docNum = (d, K) => d.numero || (K === "facture" ? "Brouillon" : "-");
 const docStatut = (d, K) => (K === "facture" ? d.statut_affiche : d.statut);
+const PREST = { fourniture: "Fourniture", main_oeuvre: "Main d'œuvre", sous_traitance: "Sous-traitance", materiel: "Matériel", divers: "Divers", ouvrage: "Ouvrage" };
+const PREST_PH = { fourniture: "Fourniture : carrelage, tuyaux, peinture…", main_oeuvre: "Main d'œuvre : pose, démolition…", sous_traitance: "Sous-traitance : électricien, plaquiste…", materiel: "Matériel : location de nacelle, benne…", divers: "Divers : frais, déplacement, remise…" };
 const UNITES = ["u", "m²", "ml", "m³", "h", "jour", "forfait", "kg", "lot"];
 const TVA_TAUX = [20, 10, 5.5, 0];
 
@@ -113,7 +115,7 @@ function docPreview(K, d, lignes, ex = {}) {
       <div style="text-align:right"><b>${K === "facture" ? esc(fxLabel(d)) : k.label} ${esc(docNum(d, K))}</b><small>Date : ${D(d[k.df])}</small><small>${K === "devis" ? `Valable ${d.validite_jours} jours` : `Échéance : ${D(d.echeance)}`}</small></div></div>
     <div class="doc-h"><div><small>${K === "devis" ? "Destinataire" : "Facturé à"}</small><b>${esc(c.nom || d.client_nom)}</b><small>${esc(c.adresse || "")}</small><small>${esc(c.ville || "")}</small></div>
       ${d.chantier_nom ? `<div style="text-align:right"><small>Chantier</small><b>${esc(d.chantier_nom)}</b></div>` : ""}</div>
-    ${[ex.debut_travaux ? `Début des travaux : ${D(ex.debut_travaux)}` : "", ex.duree_estimee ? `Durée estimée : ${esc(ex.duree_estimee)}` : "", ex.fin_chantier ? `Fin de chantier au plus tard : ${D(ex.fin_chantier)}` : ""].filter(Boolean).length ? `<p class="mut" style="margin:0 0 8px">${[ex.debut_travaux ? `Début des travaux : ${D(ex.debut_travaux)}` : "", ex.duree_estimee ? `Durée estimée : ${esc(ex.duree_estimee)}` : "", ex.fin_chantier ? `Fin de chantier au plus tard : ${D(ex.fin_chantier)}` : ""].filter(Boolean).join(" · ")}</p>` : ""}${ex.description ? `<p style="margin:0 0 12px;white-space:pre-line">${esc(ex.description)}</p>` : ""}
+    ${ex.titre ? `<h3 style="margin:0 0 10px">${esc(ex.titre)}</h3>` : ""}${[ex.debut_travaux ? `Début des travaux : ${D(ex.debut_travaux)}` : "", ex.duree_estimee ? `Durée estimée : ${esc(ex.duree_estimee)}` : "", ex.fin_chantier ? `Fin de chantier au plus tard : ${D(ex.fin_chantier)}` : ""].filter(Boolean).length ? `<p class="mut" style="margin:0 0 8px">${[ex.debut_travaux ? `Début des travaux : ${D(ex.debut_travaux)}` : "", ex.duree_estimee ? `Durée estimée : ${esc(ex.duree_estimee)}` : "", ex.fin_chantier ? `Fin de chantier au plus tard : ${D(ex.fin_chantier)}` : ""].filter(Boolean).join(" · ")}</p>` : ""}${ex.description ? `<p style="margin:0 0 12px;white-space:pre-line">${esc(ex.description)}</p>` : ""}
     ${recap}${avancement}
     <div class="tw"><table class="dt"><thead><tr><th class="n">N°</th><th>Désignation</th><th class="r">Quantité</th><th class="r">P.U. HT</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="totaux">${fxTot}<div><span>${ded.length ? "Reste à facturer HT" : "Total HT"}</span><span class="num">${E2(d.montant_ht)}</span></div>
@@ -176,7 +178,7 @@ async function docDetail(K, id) {
     ? card("Paiements reçus", paiements.map((x) => `<div class="row"><div><b>${E2(x.montant)}</b><small>${D(x.date_paiement)} · ${esc(x.mode)}</small></div><button class="lk w" data-act="payDel" data-id="${x.id}">Supprimer</button></div>`).join(""))
     : "";
   const echHtml = K === "facture" && d.statut !== "Annulée" && !fxIsAvoir(d) ? echCard(d) : "";
-  return page(`${esc(docNum(d, K))} ${chip(st)}`, `${K === "facture" && fxNat(d) !== "Facture" ? esc(fxLabel(d)) + " · " : ""}${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
+  return page(`${esc(docNum(d, K))} ${chip(st)}`, `${ex.titre ? "<b>" + esc(ex.titre) + "</b> · " : ""}${K === "facture" && fxNat(d) !== "Facture" ? esc(fxLabel(d)) + " · " : ""}${esc(d.client_nom)} · ${E2(d.montant_ttc)} TTC`, `${actions}`,
     `<div class="g2"><div>${docPreview(K, d, lignes, ex)}</div><div>${card("Suivi", suivi)}${card("Partage en ligne", partageHtml)}${K === "devis" ? sigCard(id) + fxDevisCard(d) + (typeof mkDevisCards === "function" ? mkDevisCards(d, lignes) : "") : fxDetailCard(d) + fxLinkedCard(d)}${echHtml}${payHtml}${K === "facture" ? rgInvoiceCard(d) : ""}</div></div>`,
     crumbs([K === "devis" ? "Devis" : "Factures", k.route], [docNum(d, K)]));
 }
@@ -195,7 +197,7 @@ function ligneRow(l = {}) {
   }
   const txt = nat === "libre" && !(Number(l.prix_unitaire_ht) > 0);
   return `<tr class="lr${nat !== "normale" ? " lr-x" : ""}${txt ? " lr-txt" : ""}" data-tp="${l._tp ?? ""}" data-mref="${esc(l.marche_ref || "")}" data-nat="${nat}" data-ref="${l.ref_facture_id || ""}"><td class="ln">${dg}<span class="ln-n" data-f="num"></span></td>
-    <td class="ld"><input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Texte libre, ou poste libre (frais de déplacement, remise commerciale…)" : "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea>${cxCurK === "devis" ? cxPanel(l) : ""}</td>
+    <td class="ld">${nat === "libre" ? "" : `<select class="typ typ-${esc(l.type_prestation || "")}" data-f="typ" aria-label="Type de ligne"><option value="">Type…</option>${Object.entries(PREST).map(([v, t]) => `<option value="${v}"${v === l.type_prestation ? " selected" : ""}>${t}</option>`).join("")}</select>`}<input type="text" data-f="des" value="${esc(l.designation || "")}" placeholder="${nat === "libre" ? "Texte libre, ou poste libre (frais de déplacement, remise commerciale…)" : PREST_PH[l.type_prestation] || "Désignation de la prestation"}"><textarea data-f="desc" rows="1" placeholder="Description (facultatif) : détails, matériaux, normes…">${esc(l.description || "")}</textarea>${cxCurK === "devis" ? cxPanel(l) : ""}</td>
     <td><input type="text" inputmode="decimal" data-f="qte" value="${l.quantite !== undefined ? String(l.quantite).replace(".", ",") : "1"}" aria-label="Quantité"></td>
     <td><input type="text" data-f="uni" list="unites" value="${esc(l.unite || "u")}" aria-label="Unité"></td>
     <td><input type="text" inputmode="decimal" data-f="pu" value="${l.prix_unitaire_ht !== undefined ? String(l.prix_unitaire_ht).replace(".", ",") : ""}" placeholder="0,00" aria-label="Prix unitaire HT"></td>
@@ -213,9 +215,9 @@ function groupCats(ls, composite = false) {
   }
   return out;
 }
-const catBlock = (g) => `<section class="cat"><div class="cat-h"><span class="dg-h cat-dg" data-dragcat title="Glisser pour déplacer la section" aria-label="Déplacer la section">⋮⋮</span><span class="cat-n" data-f="catn"></span><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Titre de la section (facultatif) : Démolition, Plomberie…" aria-label="Titre de la section"><span class="num cat-sub" data-f="sub"></span><span class="cat-act"><button type="button" class="rm" data-upcat title="Monter la section" aria-label="Monter la section">${svg(ic.up)}</button><button type="button" class="rm" data-downcat title="Descendre la section" aria-label="Descendre la section">${svg(ic.down)}</button><button type="button" class="rm" data-rmcat title="Supprimer la section et ses lignes" aria-label="Supprimer la section">${svg(ic.x)}</button></span></div>${cxCurK === "devis" && typeof mkCatFields === "function" && db.v14 ? `<details class="cat-more"${g.lot || g.sous_lot || g.tranche || g.tranche_cond ? " open" : ""}><summary>Marché public : lot, sous-lot, tranche</summary>${mkCatFields(g)}</details>` : ""}
+const catBlock = (g) => `<section class="cat"><div class="cat-h"><button type="button" class="rm cat-fold" data-fold title="Replier / déplier la section" aria-label="Replier ou déplier la section">${svg(ic.down)}</button><span class="dg-h cat-dg" data-dragcat title="Glisser pour déplacer la section" aria-label="Déplacer la section">⋮⋮</span><span class="cat-n" data-f="catn"></span><input type="text" data-f="cat" value="${esc(g.cat)}" placeholder="Titre de la section (facultatif) : Démolition, Plomberie…" aria-label="Titre de la section"><span class="num cat-sub" data-f="sub"></span><span class="cat-act"><button type="button" class="rm" data-upcat title="Monter la section" aria-label="Monter la section">${svg(ic.up)}</button><button type="button" class="rm" data-downcat title="Descendre la section" aria-label="Descendre la section">${svg(ic.down)}</button><button type="button" class="rm" data-rmcat title="Supprimer la section et ses lignes" aria-label="Supprimer la section">${svg(ic.x)}</button></span></div>${cxCurK === "devis" && typeof mkCatFields === "function" && db.v14 ? `<details class="cat-more"${g.lot || g.sous_lot || g.tranche || g.tranche_cond ? " open" : ""}><summary>Marché public : lot, sous-lot, tranche</summary>${mkCatFields(g)}</details>` : ""}
   <div class="tw"><table class="lines">${LCOLS}<tbody class="lb">${g.lignes.map(ligneRow).join("")}</tbody></table></div>
-  <button type="button" class="addl" data-addl>+ Ajouter une ligne</button></section>`;
+  <div class="addbar"><span>Ajouter :</span>${["fourniture", "main_oeuvre", "sous_traitance", "materiel", "divers"].map((t) => `<button type="button" class="chip-b t-${t}" data-addt="${t}">${PREST[t]}</button>`).join("")}<button type="button" class="chip-b" data-addt="ouvrage">Ouvrage</button><button type="button" class="addl" data-addl>Ligne vide</button></div></section>`;
 function readLignes(root) {
   const out = [];
   $$(".cat", root).forEach((sec) => {
@@ -223,7 +225,7 @@ function readLignes(root) {
     const mkc = cxCurK === "devis" && typeof mkReadCat === "function" ? mkReadCat(sec) : {};
     $$(".lr", sec).forEach((tr) => out.push({
       ...(cxCurK === "devis" ? (cxApplyMetre(tr), cxRead(tr), { ...cxRead(tr), ...mkc, ...(typeof mkReadLine === "function" ? mkReadLine(tr) : {}) }) : {}),
-      categorie, nature: tr.dataset.nat || "normale", ref_facture_id: tr.dataset.ref || null, designation: $('[data-f="des"]', tr).value.trim(), description: $('[data-f="desc"]', tr).value.trim(),
+      categorie, type_prestation: $('[data-f="typ"]', tr)?.value || null, nature: tr.dataset.nat || "normale", ref_facture_id: tr.dataset.ref || null, designation: $('[data-f="des"]', tr).value.trim(), description: $('[data-f="desc"]', tr).value.trim(),
       quantite: parseNum($('[data-f="qte"]', tr).value), unite: $('[data-f="uni"]', tr).value.trim() || "u",
       prix_unitaire_ht: parseNum($('[data-f="pu"]', tr).value), taux_tva: Number($('[data-f="tva"]', tr).value),
     }));
@@ -272,7 +274,8 @@ function recalcLignes(root) {
       const num = $('[data-f="num"]', tr); if (num) num.textContent = real ? (titled ? `${sn}.${n}` : String(n)) : "";
       const tt = $('[data-f="tot"]', tr); if (tt) tt.textContent = isTxt || tr.dataset.nat === "saut" ? "" : fmtNum(t);
     });
-    $('[data-f="sub"]', sec).textContent = $$(".lr", sec).length ? "Sous-total " + E2(s) : "";
+    $('[data-f="sub"]', sec).textContent = $$(".lr", sec).length ? (sec.classList.contains("fold") ? `${n} ligne${n > 1 ? "s" : ""} · ` : "") + "Sous-total " + E2(s) : "";
+    sec.dataset.sum = s; sec.dataset.n = n;
   });
   const by = totauxParTaux(ls.filter((l) => (l.designation || l.prix_unitaire_ht) && l.nature !== "saut" && cxIncluded(l)));
   const tp = sum(rows, (tr) => (Number(tr.dataset.tp) || 0) * parseNum($('[data-f="qte"]', tr).value));
@@ -283,6 +286,7 @@ function recalcLignes(root) {
   const st = $("#edstat", root);
   if (st) { const n = real.length; st.innerHTML = n ? `<b>${n} prestation${n > 1 ? "s" : ""}</b> · HT ${E2(ht)} · <strong>TTC ${E2(ht + tva)}</strong>` : "Ajoutez au moins une prestation pour continuer."; }
   const em = $("#shempty", root); if (em) em.hidden = rows.length > 0;
+  if (typeof shNav === "function") shNav(root);
   if (cxCurK === "devis") cxAfterRecalc(root, ls);
   root.dispatchEvent(new CustomEvent("sheet-changed"));
 }
@@ -290,16 +294,17 @@ function recalcLignes(root) {
 async function saveCats(K, id, ls) {
   const k = KD[K];
   const rows = await q(sb.from(k.lt).select("id").eq(k.fk, id).order("position"));
-  const ext = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : K === "devis" && db.v13 ? { ...cxExt(l), ...(db.v14 && typeof mkExt === "function" ? mkExt(l) : {}), ...(db.v24 ? { nature: l.nature || "normale" } : {}) } : K === "devis" && db.v24 ? { nature: l.nature || "normale" } : {});
+  const ext0 = (l) => (K === "facture" && db.v8 ? { nature: l.nature || "normale", ref_facture_id: l.ref_facture_id || null } : K === "devis" && db.v13 ? { ...cxExt(l), ...(db.v14 && typeof mkExt === "function" ? mkExt(l) : {}), ...(db.v24 ? { nature: l.nature || "normale" } : {}) } : K === "devis" && db.v24 ? { nature: l.nature || "normale" } : {});
+  const ext = (l) => ({ ...ext0(l), ...(db.v25 ? { type_prestation: l.type_prestation || null } : {}) });
   await Promise.all(rows.map((r, i) => (ls[i] ? q(sb.from(k.lt).update({ categorie: ls[i].categorie || null, description: ls[i].description || null, ...ext(ls[i]) }).eq("id", r.id)) : null)));
 }
 async function copyCats(did, fid) {
   try {
     await docV24();
-    let a = await q(sb.from("devis_lignes").select((db.v13 ? "categorie,description,type_ligne,est_option,option_choisie" : "categorie,description") + (db.v24 ? ",nature" : "")).eq("devis_id", did).order("position"));
+    let a = await q(sb.from("devis_lignes").select((db.v13 ? "categorie,description,type_ligne,est_option,option_choisie" : "categorie,description") + (db.v24 ? ",nature" : "") + (db.v25 ? ",type_prestation" : "")).eq("devis_id", did).order("position"));
     if (db.v13) a = a.filter((x) => x.type_ligne !== "image" && (!x.est_option || x.option_choisie));
     const b = await q(sb.from("factures_lignes").select("id").eq("facture_id", fid).order("position"));
-    await Promise.all(b.map((r, i) => (a[i] ? q(sb.from("factures_lignes").update({ categorie: a[i].categorie, description: a[i].description, ...(db.v24 && a[i].nature && a[i].nature !== "normale" ? { nature: a[i].nature } : {}) }).eq("id", r.id)) : null)));
+    await Promise.all(b.map((r, i) => (a[i] ? q(sb.from("factures_lignes").update({ categorie: a[i].categorie, description: a[i].description, ...(db.v25 ? { type_prestation: a[i].type_prestation || null } : {}), ...(db.v24 && a[i].nature && a[i].nature !== "normale" ? { nature: a[i].nature } : {}) }).eq("id", r.id)) : null)));
   } catch (e) { console.warn("Catégories non copiées", e); }
 }
 
@@ -313,15 +318,27 @@ async function docV24() {
   } catch (e) { db.v24 = false; }
   return db.v24;
 }
+// Migration v25 : nom du document (titre) et type de ligne (fourniture, main d'œuvre, sous-traitance, matériel, divers)
+async function docV25() {
+  if (db.v25 !== undefined) return db.v25;
+  try {
+    const a = await sb.from("devis").select("titre").limit(1);
+    const b = await sb.from("devis_lignes").select("type_prestation").limit(1);
+    db.v25 = !a.error && !b.error;
+  } catch (e) { db.v25 = false; }
+  return db.v25;
+}
 async function docExtra(K, id) {
-  if (!id || !(await docV24())) return {};
-  try { const r = await sb.from(KD[K].list).select("description,debut_travaux,duree_estimee,fin_chantier").eq("id", id).maybeSingle(); return r.data || {}; } catch (e) { return {}; }
+  if (!id) return {};
+  const v25 = await docV25();
+  if (!(await docV24())) { if (!v25) return {}; try { const r = await sb.from(KD[K].list).select("titre").eq("id", id).maybeSingle(); return r.data || {}; } catch (e) { return {}; } }
+  try { const r = await sb.from(KD[K].list).select("description,debut_travaux,duree_estimee,fin_chantier" + (v25 ? ",titre" : "")).eq("id", id).maybeSingle(); return r.data || {}; } catch (e) { return {}; }
 }
 const docRealLine = (l) => l.type_ligne !== "image" && l.nature !== "saut" && !(l.nature === "libre" && !(Number(l.prix_unitaire_ht) > 0));
 
 async function docForm(K, d, opts = {}) {
   if (!guard()) return;
-  const k = KD[K], v24 = await docV24();
+  const k = KD[K], v24 = await docV24(), v25 = await docV25();
   cxCurK = K === "devis" && db.v13 ? "devis" : "";
   const lignes = d ? await lignesOf(K, d.id) : opts.lignes || [];
   const ex = d ? await docExtra(K, d.id) : {};
@@ -335,11 +352,12 @@ async function docForm(K, d, opts = {}) {
   const inl = (name, type, val, extra = "") => `<input class="inl" type="${type}" id="f_${name}" name="${name}" value="${esc(val ?? "")}" ${extra}>`;
   const body = `<datalist id="unites">${UNITES.map((u) => `<option value="${u}">`).join("")}</datalist>
   <div class="sheet-wrap" id="shw"><div class="sheet-main">
-    <div class="sheet-bar"><span>Modifiez le document directement : chaque élément est éditable, les totaux se mettent à jour en direct.</span><button type="button" class="btn o sm" id="shprev" aria-pressed="false">Aperçu PDF en direct</button></div>
+    <div class="sheet-bar"><span><b>1.</b> Remplissez l'en-tête · <b>2.</b> Ajoutez vos lignes par section · <b>3.</b> Vérifiez à droite : tout se met à jour en direct.</span><button type="button" class="btn o sm" id="shprev" aria-pressed="false">Aperçu PDF en direct</button></div>
     <div class="sheet">
       <div class="sh-head">
         <div class="sh-meta">
           <h2 class="sh-title">${title} ${num && num !== "Brouillon" && num !== "-" ? "n° " + esc(num) : `<span class="sh-new">${d ? "(brouillon)" : "(nouveau)"}</span>`}</h2>
+          ${v25 ? `<label class="sh-name"><span>Nom du ${isD ? "devis" : "document"}</span>${inl("titre", "text", ex.titre || "", `placeholder="${isD ? "ex : Rénovation salle de bain, M. Dupont" : "ex : Facture d'acompte, chantier Dupont"}" maxlength="120"`)}</label>` : ""}
           <div class="sh-l">En date du ${inl("date", "date", d?.[k.df] || today(), "required")}</div>
           ${isD ? `<div class="sh-l">Valable ${inl("validite_jours", "number", d?.validite_jours || 30, 'min="1" required')} jours, soit jusqu'au <b id="shuntil"></b></div>
             <div class="chips sh-chips" data-chips="validite_jours">${[15, 30, 60, 90].map((n) => `<button type="button" class="chip-b" data-set="validite_jours" data-val="${n}">${n} j</button>`).join("")}</div>`
@@ -355,12 +373,13 @@ async function docForm(K, d, opts = {}) {
       ${v24 ? `<div class="sh-desc"><button type="button" class="lk-add" id="shdescb"${ex.description ? " hidden" : ""}>⊕ Ajouter une description</button><textarea class="inl-ta" id="f_description" name="description" rows="2" placeholder="Description du projet ou des travaux (affichée avant le détail)"${ex.description ? "" : " hidden"}>${esc(ex.description || "")}</textarea></div>` : ""}
       <div class="qadd"><div class="qin">${svg(ic.search)}<input id="qaq" type="text" autocomplete="off" placeholder="${isD ? "Que faut-il chiffrer" : "Que faut-il facturer"} ? Tapez « carrelage », « cloison »… puis Entrée" aria-label="Ajouter une prestation"><button type="button" class="btn sm" id="qaok">Ajouter</button></div><div id="qasug" class="qsug" hidden></div></div>
       <div class="sh-th"><table class="lines lines-h">${LCOLS}<thead><tr><th>N°</th><th>Désignation</th><th class="r">Qté</th><th>Unité</th><th class="r">Prix U. HT</th><th>TVA</th><th class="r">Total HT</th><th></th></tr></thead></table></div>
+      <div class="secnav" id="secnav" hidden></div>
       <div id="cats">${lignes.length ? groupCats(lignes).map(catBlock).join("") : ""}</div>
-      <p class="sh-empty" id="shempty"${lignes.length ? " hidden" : ""}>Cliquez sur un des boutons ci-dessous pour ajouter un élément à votre document :</p>
+      <p class="sh-empty" id="shempty"${lignes.length ? " hidden" : ""}>Commencez par choisir un type de ligne ci-dessous (fourniture, main d'œuvre, sous-traitance, matériel, divers) :</p>
       <div class="sh-add">
-        <div class="sh-add-l"><button type="button" class="btn o sm" id="addfour">+ Fourniture</button><button type="button" class="btn o sm" id="addmo">+ Main d'œuvre</button><button type="button" class="btn o sm" id="addov">+ Ouvrage</button>
+        <div class="sh-add-l"><span class="sh-add-t">Ajouter dans la section active :</span>${["fourniture", "main_oeuvre", "sous_traitance", "materiel", "divers"].map((t) => `<button type="button" class="btn o sm t-${t}" data-addt="${t}">+ ${PREST[t]}</button>`).join("")}<button type="button" class="btn o sm" id="addov">+ Ouvrage</button>
           <details class="more sh-more"><summary class="btn o sm" aria-label="Plus d'éléments" title="Plus d'éléments">…</summary><div class="mm">${canTxt ? `<button type="button" class="mi" id="addlibre">Poste libre (remise, frais, déplacement…)</button>` : ""}${cxCurK === "devis" ? cxToolbar(K) : ""}</div></details></div>
-        <div class="sh-add-r"><button type="button" class="btn o sm" id="addc">Section</button>${canTxt ? `<button type="button" class="btn o sm" id="addtxt">Texte</button>` : ""}${canPb ? `<button type="button" class="btn o sm" id="addpb">Saut de page</button>` : ""}</div>
+        <div class="sh-add-r"><button type="button" class="btn o sm" id="addc">+ Nouvelle section</button>${canTxt ? `<button type="button" class="btn o sm" id="addtxt">Texte</button>` : ""}${canPb ? `<button type="button" class="btn o sm" id="addpb">Saut de page</button>` : ""}</div>
       </div>
       ${!v24 ? `<p class="sh-note">Pour ajouter des textes libres, des sauts de page, une description et les dates de travaux : exécutez migration_v24.sql dans Supabase.</p>` : ""}
       <div class="sh-foot">
@@ -401,6 +420,7 @@ async function docForm(K, d, opts = {}) {
       if (K === "devis" && opts.parent && db.v14) { try { await q(sb.from("devis").update({ parent_id: opts.parent }).eq("id", id)); } catch (e) { console.warn(e); } }
       if (adj) await fxSaveDetails(id, adj);
       try { await saveCats(K, id, ls); } catch (e) { console.warn(e); toast("Document enregistré, mais les catégories et descriptions n'ont pas pu l'être : exécutez migration_v4.sql dans Supabase.", "dn"); }
+      if (v25) { try { await q(sb.from(k.list).update({ titre: (v.titre || "").trim() || null }).eq("id", id)); } catch (e) { console.warn(e); } }
       if (v24) { try { await q(sb.from(k.list).update({ description: (v.description || "").trim() || null, debut_travaux: v.debut_travaux || null, duree_estimee: (v.duree_estimee || "").trim() || null, fin_chantier: v.fin_chantier || null }).eq("id", id)); } catch (e) { console.warn(e); toast("Document enregistré, mais la description et les dates de travaux n'ont pas pu l'être.", "dn"); } }
       api.close();
       toast(d ? "Modifications enregistrées." : `${k.label} créé en brouillon.`, "ok");
@@ -441,7 +461,7 @@ async function docPdfBytes(K, id) {
     kind: K, numero: d.numero || (K === "facture" ? "(brouillon)" : ""), date: d[k.df], echeance: d.echeance, validite_jours: d.validite_jours,
     statut: d.statut, notes: d.notes, client: { nom: c.nom || d.client_nom, adresse: c.adresse, ville: c.ville, email: c.email, telephone: c.telephone },
     chantier: ch ? { nom: ch.nom, ville: ch.ville } : null, lignes, ht: d.montant_ht, tva: d.montant_tva, ttc: d.montant_ttc, taux_tva: d.taux_tva,
-    paye: d.paye || 0, devis_numero: dv?.numero, intro: ex.description || "", travaux: { debut: ex.debut_travaux, duree: ex.duree_estimee, fin: ex.fin_chantier },
+    paye: d.paye || 0, devis_numero: dv?.numero, titre: ex.titre || "", intro: ex.description || "", travaux: { debut: ex.debut_travaux, duree: ex.duree_estimee, fin: ex.fin_chantier },
     qr: K === "facture" && d.statut !== "Brouillon" && typeof rgEpcMatrix === "function" ? rgEpcMatrix(d) : null,
     fx: K === "facture" && typeof fxPdfData === "function" ? fxPdfData(d) : null,
     empreinte: K === "facture" && d.statut !== "Brouillon" && typeof cfEmpreinte === "function" ? await cfEmpreinte(d, lignes) : "",

@@ -100,8 +100,10 @@ function edEnhance(m, K) {
 
 
 /* ---------- Feuille de document (v24) : boutons d'ajout, glisser-déposer, aperçu PDF en direct ---------- */
+function shCurSec(m) { return m._cur && m.contains(m._cur) ? m._cur : $$(".cat", m).pop() || null; }
 function shLastLb(m) {
-  let lb = $$(".lb", m).pop();
+  const cs = shCurSec(m);
+  let lb = cs ? $(".lb", cs) : null;
   if (!lb) { $("#cats", m).insertAdjacentHTML("beforeend", catBlock({ cat: "", lignes: [] })); lb = $$(".lb", m).pop(); }
   return lb;
 }
@@ -114,6 +116,26 @@ function shAddRow(m, l, focusField = "des") {
   if (f && f.type !== "hidden") { f.focus(); f.select?.(); }
   tr.scrollIntoView({ block: "center", behavior: "smooth" });
   return tr;
+}
+// Ajoute une ligne d'un type donné (fourniture, main d'œuvre, sous-traitance, matériel, divers) dans une section
+function shAddTyped(m, type, sec) {
+  if (sec) m._cur = sec;
+  if (type === "ouvrage") return ovPicker((x) => ovInsertLine(m, x));
+  const base = { type_prestation: type, unite: { fourniture: "u", main_oeuvre: "h", sous_traitance: "forfait", materiel: "jour", divers: "forfait" }[type] };
+  if (type === "main_oeuvre") { const tx = Number(db.ent.taux_horaire_vente) || 0; return shAddRow(m, { ...base, designation: "Main d'œuvre", prix_unitaire_ht: tx > 0 ? tx : undefined }, tx > 0 ? "qte" : "pu"); }
+  return shAddRow(m, base);
+}
+// Navigation par sections : puces cliquables (retour vers une section précédente), tout replier / déplier
+function shNav(m) {
+  const nav = $("#secnav", m); if (!nav) return;
+  const secs = $$(".cat", m);
+  nav.hidden = secs.length < 2;
+  if (secs.length < 2) return;
+  const cur = shCurSec(m);
+  nav.innerHTML = `<span class="sn-t">Sections</span>` + secs.map((sc, i) => {
+    const nm = $('[data-f="cat"]', sc).value.trim() || "Sans titre";
+    return `<button type="button" class="sn${sc === cur ? " on" : ""}" data-goto="${i}" title="${esc(nm)}"><span>${i + 1}. ${esc(nm)}</span><small>${E2(Number(sc.dataset.sum) || 0)}</small></button>`;
+  }).join("") + `<span class="sn-sp"></span><button type="button" class="sn-x" data-foldall="1">Tout replier</button><button type="button" class="sn-x" data-foldall="0">Tout déplier</button>`;
 }
 function shGrow(ta) { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight + 2, 400) + "px"; }
 
@@ -133,7 +155,7 @@ async function shLiveBytes(m, K, d) {
     kind: K, numero: d?.numero || (K === "facture" ? "(brouillon)" : ""), date: v.date, echeance: v.echeance, validite_jours: dd.validite_jours, statut: dd.statut, notes: v.notes,
     client: { nom: c.nom, adresse: c.adresse, ville: c.ville, email: c.email, telephone: c.telephone }, chantier: ch ? { nom: ch.nom, ville: ch.ville } : null,
     lignes: ls, ht, tva, ttc: dd.montant_ttc, taux_tva: ls[0]?.taux_tva, paye: 0, qr: null, fx: null, empreinte: "", mentions, aides: [],
-    intro: v.description || "", travaux: { debut: v.debut_travaux, duree: v.duree_estimee, fin: v.fin_chantier },
+    titre: v.titre || "", intro: v.description || "", travaux: { debut: v.debut_travaux, duree: v.duree_estimee, fin: v.fin_chantier },
   };
   const pctx = await pdfContext(K);
   if (typeof cxPdfImages === "function") pctx.images = await cxPdfImages(ls);
@@ -155,7 +177,9 @@ function shPreview(m, K, d) {
     } catch (e) { st.textContent = "Aperçu indisponible"; console.warn(e); }
   };
   const sched = () => { if (!on) return; st.textContent = "Mise à jour…"; clearTimeout(timer); timer = setTimeout(build, 700); };
-  btn.onclick = () => { on = !on; pv.hidden = !on; m.classList.toggle("prev", on); btn.setAttribute("aria-pressed", String(on)); btn.textContent = on ? "Masquer l'aperçu" : "Aperçu PDF en direct"; if (on) build(); };
+  btn.onclick = () => { on = !on; pv.hidden = !on; m.classList.toggle("prev", on); btn.setAttribute("aria-pressed", String(on)); btn.textContent = on ? "Masquer l'aperçu" : "Aperçu PDF en direct"; try { localStorage.setItem("pilot.edprev", on ? "1" : "0"); } catch (e) { /* ignoré */ } if (on) build(); };
+  let pref = null; try { pref = localStorage.getItem("pilot.edprev"); } catch (e) { /* ignoré */ }
+  if (pref === "1" || (pref === null && window.innerWidth >= 1280)) setTimeout(() => btn.click(), 200);
   ["input", "change", "sheet-changed"].forEach((ev) => m.addEventListener(ev, sched));
 }
 
@@ -166,6 +190,7 @@ function edSheet(m, K, d, o = {}) {
   if (db_) db_.onclick = () => { db_.hidden = true; dt.hidden = false; shGrow(dt); dt.focus(); };
   // validité : date de fin affichée en clair
   const until = () => { const el = $("#shuntil", m), dte = $("#f_date", m), n = $("#f_validite_jours", m); if (el && dte?.value) el.textContent = D(addDays(dte.value, parseInt(n?.value) || 30)); };
+  m.addEventListener("change", (e) => { if (e.target.matches('select[data-f="typ"]')) { const tr = e.target.closest("tr"); e.target.className = "typ typ-" + e.target.value; const des = $('[data-f="des"]', tr); if (des && !des.value) des.placeholder = PREST_PH[e.target.value] || "Désignation de la prestation"; } });
   m.addEventListener("input", (e) => { if (e.target.matches("#f_date,#f_validite_jours")) until(); if (e.target.matches("textarea")) shGrow(e.target); });
   until();
   $$("textarea[data-f=desc], .inl-ta", m).forEach((t) => { if (t.value) shGrow(t); });
@@ -173,20 +198,24 @@ function edSheet(m, K, d, o = {}) {
   m.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && e.target.matches(".sheet input") && !e.target.closest(".cat") && e.target.id !== "qaq") e.preventDefault(); });
 
   // la description d'une ligne reste ouverte un court instant après la perte du focus (évite un saut de mise en page au clic sur un bouton)
-  m.addEventListener("focusin", (e) => { const tr = e.target.closest?.("tr.lr"); if (tr) { clearTimeout(tr._dt); tr.classList.add("dopen"); } });
+  m.addEventListener("focusin", (e) => { const sc = e.target.closest?.(".cat"); if (sc && sc !== m._cur) { m._cur = sc; $$(".cat", m).forEach((x) => x.classList.toggle("active", x === sc)); $$(".sn", m).forEach((b, i) => b.classList.toggle("on", $$(".cat", m)[i] === sc)); } const tr = e.target.closest?.("tr.lr"); if (tr) { clearTimeout(tr._dt); tr.classList.add("dopen"); } });
   m.addEventListener("focusout", (e) => { const tr = e.target.closest?.("tr.lr"); if (tr) { clearTimeout(tr._dt); tr._dt = setTimeout(() => { if (!tr.contains(document.activeElement)) tr.classList.remove("dopen"); }, 350); } });
 
   // boutons d'ajout
   m.addEventListener("click", (e) => {
     const t = e.target, id = t.closest("button,summary")?.id;
     const close = () => { const dt2 = t.closest("details.more"); if (dt2) dt2.open = false; };
+    const at = t.closest("[data-addt]"); if (at) return shAddTyped(m, at.dataset.addt, at.closest(".cat"));
+    const gt = t.closest("[data-goto]"); if (gt) { const sc = $$(".cat", m)[Number(gt.dataset.goto)]; if (sc) { sc.classList.remove("fold"); m._cur = sc; sc.scrollIntoView({ block: "start", behavior: "smooth" }); sc.classList.add("flash"); setTimeout(() => sc.classList.remove("flash"), 1200); recalcLignes(m); } return; }
+    const fa = t.closest("[data-foldall]"); if (fa) { $$(".cat", m).forEach((sc) => sc.classList.toggle("fold", fa.dataset.foldall === "1")); return recalcLignes(m); }
+    const fd = t.closest("[data-fold]"); if (fd) { fd.closest(".cat").classList.toggle("fold"); return recalcLignes(m); }
     if (id === "addfour") return shAddRow(m, { unite: "u" });
     if (id === "addmo") { const tx = Number(db.ent.taux_horaire_vente) || 0; return shAddRow(m, { designation: "Main d'œuvre", unite: "h", prix_unitaire_ht: tx > 0 ? tx : undefined }, tx > 0 ? "qte" : "pu"); }
     if (id === "addov") return ovPicker((x) => ovInsertLine(m, x));
     if (id === "addlibre") { close(); return shAddRow(m, { nature: "libre", unite: "", prix_unitaire_ht: "" }); }
     if (id === "addtxt") return shAddRow(m, { nature: "libre", unite: "", prix_unitaire_ht: "" });
     if (id === "addpb") { shAddRow(m, { nature: "saut" }, "none"); return; }
-    if (id === "addc") { $("#cats", m).insertAdjacentHTML("beforeend", catBlock({ cat: "", lignes: [] })); recalcLignes(m); const ti = $$('[data-f="cat"]', m).pop(); ti.focus(); return ti.scrollIntoView({ block: "center", behavior: "smooth" }); }
+    if (id === "addc") { $("#cats", m).insertAdjacentHTML("beforeend", catBlock({ cat: "", lignes: [] })); m._cur = $$(".cat", m).pop(); recalcLignes(m); const ti = $$('[data-f="cat"]', m).pop(); ti.focus(); return ti.scrollIntoView({ block: "center", behavior: "smooth" }); }
     const al = t.closest("[data-addl]");
     if (al) { const lb = $(".lb", al.closest(".cat")); lb.insertAdjacentHTML("beforeend", ligneRow({ taux_tva: Number($('[data-f="tva"]', lb.lastElementChild)?.value) || undefined })); $$('[data-f="des"]', lb).pop().focus(); return recalcLignes(m); }
     const rc = t.closest("[data-rmcat]");
