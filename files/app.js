@@ -139,6 +139,7 @@ const ACT = {
   ...(typeof moeActions !== "undefined" ? moeActions : {}),
   ...(typeof chProActions !== "undefined" ? chProActions : {}),
   ...(typeof risquesActions !== "undefined" ? risquesActions : {}),
+  ...(typeof metresActions !== "undefined" ? metresActions : {}),
   ...(typeof contratsActions !== "undefined" ? contratsActions : {}),
   ...(typeof interventionsActions !== "undefined" ? interventionsActions : {}),
   ...(typeof comparateurActions !== "undefined" ? comparateurActions : {}),

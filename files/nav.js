@@ -31,7 +31,7 @@ const DOMAINS = [
     ["contrats", "Contrats d'entretien", "maintenance renouvellement visites récurrent"], ["ouvrages", "Bibliothèque d'ouvrages", "prix catalogue bordereau"], ["liens", "Liens partagés", "suivi consultation"], ["moe", "Maîtrise d'œuvre", "architecte moe"],
   ] },
   { id: "chantiers", label: "Chantiers", icon: "d_chantiers", items: [
-    ["chantiers", "Chantiers", "projets"], ["interventions", "Bons d'intervention", "dépannage sav technicien photos signature"], ["livraisons", "Bons de livraison", "livrer matériel réception reliquat"], ["carte", "Carte des chantiers", "plan localisation gps adresse avancement"], ["journal", "Journal de chantier", "carnet de bord météo photos rapport quotidien"], ["planning", "Planning", "calendrier"], ["temps", "Temps passés", "heures"],
+    ["chantiers", "Chantiers", "projets"], ["interventions", "Bons d'intervention", "dépannage sav technicien photos signature"], ["livraisons", "Bons de livraison", "livrer matériel réception reliquat"], ["metres", "Métrés et quantitatifs", "plan pdf mesure surface peinture carrelage placo béton quantitatif toisé métré"], ["carte", "Carte des chantiers", "plan localisation gps adresse avancement"], ["journal", "Journal de chantier", "carnet de bord météo photos rapport quotidien"], ["planning", "Planning", "calendrier"], ["temps", "Temps passés", "heures"],
     ["pv", "PV de réception", "réception réserves"], ["notes", "Notes", "carnet"],
   ] },
   { id: "achats", label: "Achats", icon: "achats", items: [

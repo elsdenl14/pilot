@@ -121,6 +121,7 @@ async function load() {
   try { if (typeof loadV17 === "function") await loadV17(); } catch (e) { db.v17 = false; db.v17err = e?.message || String(e); console.warn(e); }
   try { if (typeof loadV10 === "function") await loadV10(); } catch (e) { db.v10 = false; console.warn(e); }
   try { if (typeof loadV21 === "function") await loadV21(); } catch (e) { db.v21 = false; db.v21err = e?.message || String(e); console.warn(e); }
+  try { if (typeof loadV23 === "function") await loadV23(); } catch (e) { db.v23 = false; db.v23err = e?.message || String(e); console.warn(e); }
   try { await loadV9(); db.v9 = true; db.v9err = ""; } catch (e) { db.rg = rgEmpty(); db.v9 = false; db.v9err = e?.message || String(e); }
 }
 const setupV7 = (what = "cette fonction") =>
